@@ -19,15 +19,20 @@ import (
 	"unsafe"
 )
 
+// int类型与机器相关
+// 此次计算int 占用长度
 const intWidth int = int(unsafe.Sizeof(0))
 
+// 字节序
 var byteOrder binary.ByteOrder
 
 // ByteOrder returns the byte order for the CPU's native endianness.
 func ByteOrder() binary.ByteOrder { return byteOrder }
 
+// 初始化
 func init() {
 	i := int(0x1)
+
 	if v := (*[intWidth]byte)(unsafe.Pointer(&i)); v[0] == 0 {
 		byteOrder = binary.BigEndian
 	} else {

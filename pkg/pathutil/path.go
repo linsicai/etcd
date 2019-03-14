@@ -16,11 +16,16 @@ import "path"
 // The function is borrowed from stdlib http.cleanPath in server.go.
 func CanonicalURLPath(p string) string {
 	if p == "" {
+	    // 默认根目录
 		return "/"
 	}
+
+    // 默认起始为根目录
 	if p[0] != '/' {
 		p = "/" + p
 	}
+
+    // 路径清理
 	np := path.Clean(p)
 	// path.Clean removes trailing slash except for root,
 	// put the trailing slash back if necessary.

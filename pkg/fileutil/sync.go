@@ -18,6 +18,11 @@ package fileutil
 
 import "os"
 
+// 写磁盘时，先写缓冲区，写满后添加到写队列，再写磁盘
+// sync 将缓冲区添加到写队列
+// fsync 等到写磁盘完成后才返回，包括数据和属性
+// fdatasync 类似fsync，但是只同步文件数据部分
+
 // Fsync is a wrapper around file.Sync(). Special handling is needed on darwin platform.
 func Fsync(f *os.File) error {
 	return f.Sync()

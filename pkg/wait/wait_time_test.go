@@ -21,6 +21,8 @@ import (
 
 func TestWaitTime(t *testing.T) {
 	wt := NewTimeList()
+
+    // 触发成功、预计可读
 	ch1 := wt.Wait(1)
 	wt.Trigger(2)
 	select {
@@ -29,6 +31,7 @@ func TestWaitTime(t *testing.T) {
 		t.Fatalf("cannot receive from ch as expected")
 	}
 
+    // 未到时间触发，预计不可读
 	ch2 := wt.Wait(4)
 	wt.Trigger(3)
 	select {
@@ -36,13 +39,13 @@ func TestWaitTime(t *testing.T) {
 		t.Fatalf("unexpected to receive from ch2")
 	default:
 	}
+	// 到时间了，可读
 	wt.Trigger(4)
 	select {
 	case <-ch2:
 	default:
 		t.Fatalf("cannot receive from ch2 as expected")
 	}
-
 	select {
 	// wait on a triggered deadline
 	case <-wt.Wait(4):
@@ -53,12 +56,15 @@ func TestWaitTime(t *testing.T) {
 
 func TestWaitTestStress(t *testing.T) {
 	chs := make([]<-chan struct{}, 0)
+
+    // 触发多个
 	wt := NewTimeList()
 	for i := 0; i < 10000; i++ {
 		chs = append(chs, wt.Wait(uint64(i)))
 	}
 	wt.Trigger(10000 + 1)
 
+    // 测试可读
 	for _, ch := range chs {
 		select {
 		case <-ch:
@@ -68,19 +74,24 @@ func TestWaitTestStress(t *testing.T) {
 	}
 }
 
+// 测试创建
 func BenchmarkWaitTime(b *testing.B) {
 	wt := NewTimeList()
+
 	for i := 0; i < b.N; i++ {
 		wt.Wait(1)
 	}
 }
 
+// 测试创建与触发
 func BenchmarkTriggerAnd10KWaitTime(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		wt := NewTimeList()
+
 		for j := 0; j < 10000; j++ {
 			wt.Wait(uint64(j))
 		}
+
 		wt.Trigger(10000 + 1)
 	}
 }

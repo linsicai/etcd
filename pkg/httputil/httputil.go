@@ -32,6 +32,7 @@ import (
 // Borrowed from golang/net/context/ctxhttp/cancelreq.go.
 func GracefulClose(resp *http.Response) {
 	io.Copy(ioutil.Discard, resp.Body)
+
 	resp.Body.Close()
 }
 

@@ -25,13 +25,18 @@ import (
 // interval. If the observed duration is longer than
 // the expectation, the detector will report the result.
 type TimeoutDetector struct {
+    // 锁
 	mu          sync.Mutex // protects all
+
+    // 最大时间间隔
 	maxDuration time.Duration
+
 	// map from event to time
 	// time is the last seen time of the event.
 	records map[uint64]time.Time
 }
 
+// 创建
 // NewTimeoutDetector creates the TimeoutDetector.
 func NewTimeoutDetector(maxDuration time.Duration) *TimeoutDetector {
 	return &TimeoutDetector{
@@ -40,6 +45,7 @@ func NewTimeoutDetector(maxDuration time.Duration) *TimeoutDetector {
 	}
 }
 
+// 初始化
 // Reset resets the NewTimeoutDetector.
 func (td *TimeoutDetector) Reset() {
 	td.mu.Lock()
@@ -48,6 +54,8 @@ func (td *TimeoutDetector) Reset() {
 	td.records = make(map[uint64]time.Time)
 }
 
+// 如果没入，插入
+// 如果有，看是否超时和经过时间
 // Observe observes an event for given id. It returns false and exceeded duration
 // if the interval is longer than the expectation.
 func (td *TimeoutDetector) Observe(which uint64) (bool, time.Duration) {

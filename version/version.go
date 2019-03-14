@@ -33,6 +33,7 @@ var (
 	GitSHA = "Not provided (use ./build instead of go build)"
 )
 
+// 初始化版本信息
 func init() {
 	ver, err := semver.NewVersion(Version)
 	if err == nil {
@@ -40,17 +41,20 @@ func init() {
 	}
 }
 
+// 版本信息结构
 type Versions struct {
 	Server  string `json:"etcdserver"`
 	Cluster string `json:"etcdcluster"`
 	// TODO: raft state machine version
 }
 
+// 忽略补丁号
 // Cluster only keeps the major.minor.
 func Cluster(v string) string {
 	vs := strings.Split(v, ".")
 	if len(vs) <= 2 {
 		return v
 	}
+
 	return fmt.Sprintf("%s.%s", vs[0], vs[1])
 }

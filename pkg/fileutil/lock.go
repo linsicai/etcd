@@ -20,7 +20,11 @@ import (
 )
 
 var (
+    // 错误信息
 	ErrLocked = errors.New("fileutil: file already locked")
 )
 
-type LockedFile struct{ *os.File }
+// 
+type LockedFile struct {
+    *os.File
+}

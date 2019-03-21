@@ -11,27 +11,27 @@ option (gogoproto.goproto_enum_prefix_all) = false;
 
 // User is a single entry in the bucket authUsers
 message User {
-  bytes name = 1;
-  bytes password = 2;
-  repeated string roles = 3;
+  bytes name = 1;             // 用户名
+  bytes password = 2;         // 密码
+  repeated string roles = 3;  // 角色
 }
 
 // Permission is a single entity
 message Permission {
   enum Type {
-    READ = 0;
-    WRITE = 1;
-    READWRITE = 2;
+    READ = 0;       // 读
+    WRITE = 1;      // 写
+    READWRITE = 2;  // 读写
   }
-  Type permType = 1;
+  Type permType = 1;    // 权限类型
 
-  bytes key = 2;
-  bytes range_end = 3;
+  bytes key = 2;            // 关键字
+  bytes range_end = 3;      // ???
 }
 
 // Role is a single entry in the bucket authRoles
 message Role {
-  bytes name = 1;
+  bytes name = 1;   // 角色名
 
-  repeated Permission keyPermission = 2;
+  repeated Permission keyPermission = 2;    // 关键权限列表
 }

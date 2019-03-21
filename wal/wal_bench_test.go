@@ -15,13 +15,13 @@
 package wal
 
 import (
-	"io/ioutil"
-	"os"
-	"testing"
+    "io/ioutil"
+    "os"
+    "testing"
 
-	"go.uber.org/zap"
+    "go.uber.org/zap"
 
-	"go.etcd.io/etcd/raft/raftpb"
+    "go.etcd.io/etcd/raft/raftpb"
 )
 
 func BenchmarkWrite100EntryWithoutBatch(b *testing.B) { benchmarkWriteEntry(b, 100, 0) }
@@ -37,34 +37,34 @@ func BenchmarkWrite1000EntryBatch500(b *testing.B)     { benchmarkWriteEntry(b, 
 func BenchmarkWrite1000EntryBatch1000(b *testing.B)    { benchmarkWriteEntry(b, 1000, 1000) }
 
 func benchmarkWriteEntry(b *testing.B, size int, batch int) {
-	p, err := ioutil.TempDir(os.TempDir(), "waltest")
-	if err != nil {
-		b.Fatal(err)
-	}
-	defer os.RemoveAll(p)
+    p, err := ioutil.TempDir(os.TempDir(), "waltest")
+    if err != nil {
+        b.Fatal(err)
+    }
+    defer os.RemoveAll(p)
 
-	w, err := Create(zap.NewExample(), p, []byte("somedata"))
-	if err != nil {
-		b.Fatalf("err = %v, want nil", err)
-	}
-	data := make([]byte, size)
-	for i := 0; i < size; i++ {
-		data[i] = byte(i)
-	}
-	e := &raftpb.Entry{Data: data}
+    w, err := Create(zap.NewExample(), p, []byte("somedata"))
+    if err != nil {
+        b.Fatalf("err = %v, want nil", err)
+    }
+    data := make([]byte, size)
+    for i := 0; i < size; i++ {
+        data[i] = byte(i)
+    }
+    e := &raftpb.Entry{Data: data}
 
-	b.ResetTimer()
-	n := 0
-	b.SetBytes(int64(e.Size()))
-	for i := 0; i < b.N; i++ {
-		err := w.saveEntry(e)
-		if err != nil {
-			b.Fatal(err)
-		}
-		n++
-		if n > batch {
-			w.sync()
-			n = 0
-		}
-	}
+    b.ResetTimer()
+    n := 0
+    b.SetBytes(int64(e.Size()))
+    for i := 0; i < b.N; i++ {
+        err := w.saveEntry(e)
+        if err != nil {
+            b.Fatal(err)
+        }
+        n++
+        if n > batch {
+            w.sync()
+            n = 0
+        }
+    }
 }

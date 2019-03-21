@@ -20,19 +20,19 @@ A WAL is created at a particular directory and is made up of a number of
 segmented WAL files. Inside of each file the raft state and entries are appended
 to it with the Save method:
 
-	metadata := []byte{}
-	w, err := wal.Create(zap.NewExample(), "/var/lib/etcd", metadata)
-	...
-	err := w.Save(s, ents)
+    metadata := []byte{}
+    w, err := wal.Create(zap.NewExample(), "/var/lib/etcd", metadata)
+    ...
+    err := w.Save(s, ents)
 
 After saving a raft snapshot to disk, SaveSnapshot method should be called to
 record it. So WAL can match with the saved snapshot when restarting.
 
-	err := w.SaveSnapshot(walpb.Snapshot{Index: 10, Term: 2})
+    err := w.SaveSnapshot(walpb.Snapshot{Index: 10, Term: 2})
 
 When a user has finished using a WAL it must be closed:
 
-	w.Close()
+    w.Close()
 
 Each WAL file is a stream of WAL records. A WAL record is a length field and a wal record
 protobuf. The record protobuf contains a CRC, a type, and a data payload. The length field is a
@@ -58,15 +58,15 @@ If a second cut issues 0x10 entries with incremental index later then the file w
 At a later time a WAL can be opened at a particular snapshot. If there is no
 snapshot, an empty snapshot should be passed in.
 
-	w, err := wal.Open("/var/lib/etcd", walpb.Snapshot{Index: 10, Term: 2})
-	...
+    w, err := wal.Open("/var/lib/etcd", walpb.Snapshot{Index: 10, Term: 2})
+    ...
 
 The snapshot must have been written to the WAL.
 
 Additional items cannot be Saved to this WAL until all of the items from the given
 snapshot to the end of the WAL are read first:
 
-	metadata, state, ents, err := w.ReadAll()
+    metadata, state, ents, err := w.ReadAll()
 
 This will give you the metadata, the last raft.State and the slice of
 raft.Entry items in the log.

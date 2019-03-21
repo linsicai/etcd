@@ -18,25 +18,25 @@ import "sync"
 
 // 接口
 type WaitTime interface {
-	// Wait returns a chan that waits on the given logical deadline.
-	// The chan will be triggered when Trigger is called with a
-	// deadline that is later than the one it is waiting for.
+    // Wait returns a chan that waits on the given logical deadline.
+    // The chan will be triggered when Trigger is called with a
+    // deadline that is later than the one it is waiting for.
 
-	// 创建一个deadline 之后才可用的chan
-	Wait(deadline uint64) <-chan struct{}
+    // 创建一个deadline 之后才可用的chan
+    Wait(deadline uint64) <-chan struct{}
 
 
-	// Trigger triggers all the waiting chans with an earlier logical deadline.
+    // Trigger triggers all the waiting chans with an earlier logical deadline.
 
-	// 触发deadline 及之前的通道
-	Trigger(deadline uint64)
+    // 触发deadline 及之前的通道
+    Trigger(deadline uint64)
 }
 
 // chan struct 永远是阻塞的，直至它被close
 var closec chan struct{}
 // 初始化
 func init() {
-	// 创建通道
+    // 创建通道
     closec = make(chan struct{});
 
     // 开启通道
@@ -46,59 +46,59 @@ func init() {
 // 时间列表
 type timeList struct {
     // 锁
-	l                   sync.Mutex
+    l                   sync.Mutex
 
     // 上一次触发时间
-	lastTriggerDeadline uint64
+    lastTriggerDeadline uint64
 
     // 时间 to 通道映射表
-	m                   map[uint64]chan struct{}
+    m                   map[uint64]chan struct{}
 }
 
 // 创建时间列表
 func NewTimeList() *timeList {
-	return &timeList{
-		m: make(map[uint64]chan struct{}
-	)}
+    return &timeList{
+        m: make(map[uint64]chan struct{}
+    )}
 }
 
 // Wait 接口实现
 func (tl *timeList) Wait(deadline uint64) <-chan struct{} {
-	// 锁
-	tl.l.Lock()
-	defer tl.l.Unlock()
+    // 锁
+    tl.l.Lock()
+    defer tl.l.Unlock()
 
-	// 老的deadline
-	if tl.lastTriggerDeadline >= deadline {
-		return closec
-	}
+    // 老的deadline
+    if tl.lastTriggerDeadline >= deadline {
+        return closec
+    }
 
     // 创建新的chan
-	ch := tl.m[deadline]
-	if ch == nil {
-		ch = make(chan struct{})
+    ch := tl.m[deadline]
+    if ch == nil {
+        ch = make(chan struct{})
 
-		tl.m[deadline] = ch
-	}
+        tl.m[deadline] = ch
+    }
 
-	return ch
+    return ch
 }
 
 // 触发实现接口
 func (tl *timeList) Trigger(deadline uint64) {
-	// 锁
-	tl.l.Lock()
-	defer tl.l.Unlock()
+    // 锁
+    tl.l.Lock()
+    defer tl.l.Unlock()
 
-	// 记录时间
-	tl.lastTriggerDeadline = deadline
+    // 记录时间
+    tl.lastTriggerDeadline = deadline
 
     // 触发之前的
-	for t, ch := range tl.m {
-		if t <= deadline {
-			delete(tl.m, t)
+    for t, ch := range tl.m {
+        if t <= deadline {
+            delete(tl.m, t)
 
-			close(ch)
-		}
-	}
+            close(ch)
+        }
+    }
 }

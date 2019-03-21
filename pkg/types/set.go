@@ -20,10 +20,13 @@ import (
 	"sync"
 )
 
+// SET 接口
 type Set interface {
 	Add(string)
 	Remove(string)
+
 	Contains(string) bool
+
 	Equals(Set) bool
 	Length() int
 	Values() []string
@@ -32,19 +35,26 @@ type Set interface {
 }
 
 func NewUnsafeSet(values ...string) *unsafeSet {
-	set := &unsafeSet{make(map[string]struct{})}
+	set := &unsafeSet{
+		make(map[string]struct{})
+	}
+
 	for _, v := range values {
 		set.Add(v)
 	}
+
 	return set
 }
 
 func NewThreadsafeSet(values ...string) *tsafeSet {
 	us := NewUnsafeSet(values...)
+
 	return &tsafeSet{us, sync.RWMutex{}}
 }
 
+// 无锁 SET
 type unsafeSet struct {
+	// 假装是个SET
 	d map[string]struct{}
 }
 
@@ -61,6 +71,7 @@ func (us *unsafeSet) Remove(value string) {
 // Contains returns whether the set contains the given value
 func (us *unsafeSet) Contains(value string) (exists bool) {
 	_, exists = us.d[value]
+
 	return exists
 }
 
@@ -71,15 +82,19 @@ func (us *unsafeSet) ContainsAll(values []string) bool {
 			return false
 		}
 	}
+
 	return true
 }
 
 // Equals returns whether the contents of two sets are identical
+// 转字符串，判断相等
 func (us *unsafeSet) Equals(other Set) bool {
 	v1 := sort.StringSlice(us.Values())
 	v2 := sort.StringSlice(other.Values())
+
 	v1.Sort()
 	v2.Sort()
+
 	return reflect.DeepEqual(v1, v2)
 }
 
@@ -90,16 +105,20 @@ func (us *unsafeSet) Length() int {
 
 // Values returns the values of the Set in an unspecified order.
 func (us *unsafeSet) Values() (values []string) {
+	// 字符串切片
 	values = make([]string, 0)
+
 	for val := range us.d {
 		values = append(values, val)
 	}
+
 	return values
 }
 
 // Copy creates a new Set containing the values of the first
 func (us *unsafeSet) Copy() Set {
 	cp := NewUnsafeSet()
+
 	for val := range us.d {
 		cp.Add(val)
 	}
@@ -109,13 +128,16 @@ func (us *unsafeSet) Copy() Set {
 
 // Sub removes all elements in other from the set
 func (us *unsafeSet) Sub(other Set) Set {
-	oValues := other.Values()
+	// 复制自身
 	result := us.Copy().(*unsafeSet)
 
+	// 移除其他的
+	oValues := other.Values()
 	for _, val := range oValues {
 		if _, ok := result.d[val]; !ok {
 			continue
 		}
+
 		delete(result.d, val)
 	}
 
@@ -124,48 +146,57 @@ func (us *unsafeSet) Sub(other Set) Set {
 
 type tsafeSet struct {
 	us *unsafeSet
+
+	// 读写锁
 	m  sync.RWMutex
 }
 
 func (ts *tsafeSet) Add(value string) {
 	ts.m.Lock()
 	defer ts.m.Unlock()
+
 	ts.us.Add(value)
 }
 
 func (ts *tsafeSet) Remove(value string) {
 	ts.m.Lock()
 	defer ts.m.Unlock()
+
 	ts.us.Remove(value)
 }
 
 func (ts *tsafeSet) Contains(value string) (exists bool) {
 	ts.m.RLock()
 	defer ts.m.RUnlock()
+
 	return ts.us.Contains(value)
 }
 
 func (ts *tsafeSet) Equals(other Set) bool {
 	ts.m.RLock()
 	defer ts.m.RUnlock()
+
 	return ts.us.Equals(other)
 }
 
 func (ts *tsafeSet) Length() int {
 	ts.m.RLock()
 	defer ts.m.RUnlock()
+
 	return ts.us.Length()
 }
 
 func (ts *tsafeSet) Values() (values []string) {
 	ts.m.RLock()
 	defer ts.m.RUnlock()
+
 	return ts.us.Values()
 }
 
 func (ts *tsafeSet) Copy() Set {
 	ts.m.RLock()
 	defer ts.m.RUnlock()
+
 	usResult := ts.us.Copy().(*unsafeSet)
 	return &tsafeSet{usResult, sync.RWMutex{}}
 }
@@ -173,6 +204,7 @@ func (ts *tsafeSet) Copy() Set {
 func (ts *tsafeSet) Sub(other Set) Set {
 	ts.m.RLock()
 	defer ts.m.RUnlock()
+
 	usResult := ts.us.Sub(other).(*unsafeSet)
 	return &tsafeSet{usResult, sync.RWMutex{}}
 }

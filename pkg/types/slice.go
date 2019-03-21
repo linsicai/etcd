@@ -15,6 +15,7 @@
 package types
 
 // Uint64Slice implements sort interface
+// 通用切片
 type Uint64Slice []uint64
 
 func (p Uint64Slice) Len() int           { return len(p) }

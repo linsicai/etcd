@@ -27,6 +27,7 @@ import (
 var (
 	// indirection for testing
 	lookupSRV      = net.LookupSRV // net.DefaultResolver.LookupSRV when ctxs don't conflict
+
 	resolveTCPAddr = net.ResolveTCPAddr
 )
 
@@ -129,6 +130,7 @@ func GetClient(service, domain string, serviceName string) (*SRVClients, error) 
 	return &SRVClients{Endpoints: endpoints, SRVs: srvs}, nil
 }
 
+// 服务-服务名
 // GetSRVService generates a SRV service including an optional suffix.
 func GetSRVService(service, serviceName string, scheme string) (SRVService string) {
 	if scheme == "https" {
@@ -138,5 +140,6 @@ func GetSRVService(service, serviceName string, scheme string) (SRVService strin
 	if serviceName != "" {
 		return fmt.Sprintf("%s-%s", service, serviceName)
 	}
+
 	return service
 }

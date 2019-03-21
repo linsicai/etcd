@@ -22,7 +22,9 @@ type digest struct {
 // New creates a new hash.Hash32 computing the CRC-32 checksum
 // using the polynomial represented by the Table.
 // Modified by xiangli to take a prevcrc.
-func New(prev uint32, tab *crc32.Table) hash.Hash32 { return &digest{prev, tab} }
+func New(prev uint32, tab *crc32.Table) hash.Hash32 {
+    return &digest{prev, tab}
+}
 
 func (d *digest) Size() int { return Size }
 

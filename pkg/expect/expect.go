@@ -29,17 +29,29 @@ import (
 )
 
 type ExpectProcess struct {
+    // 命令
 	cmd  *exec.Cmd
+
+    // 文件
 	fpty *os.File
+
 	wg   sync.WaitGroup
 
+    // 条件变量
 	cond  *sync.Cond // for broadcasting updates are available
+
 	mu    sync.Mutex // protects lines and err
+
 	lines []string
+
+    // 行数
 	count int // increment whenever new line gets added
+
+    // 异常
 	err   error
 
 	// StopSignal is the signal Stop sends to the process; defaults to SIGKILL.
+	// 停止信号
 	StopSignal os.Signal
 }
 
@@ -53,10 +65,12 @@ func NewExpect(name string, arg ...string) (ep *ExpectProcess, err error) {
 func NewExpectWithEnv(name string, args []string, env []string) (ep *ExpectProcess, err error) {
 	cmd := exec.Command(name, args...)
 	cmd.Env = env
+
 	ep = &ExpectProcess{
 		cmd:        cmd,
 		StopSignal: syscall.SIGKILL,
 	}
+
 	ep.cond = sync.NewCond(&ep.mu)
 	ep.cmd.Stderr = ep.cmd.Stdout
 	ep.cmd.Stdin = nil
@@ -70,18 +84,22 @@ func NewExpectWithEnv(name string, args []string, env []string) (ep *ExpectProce
 	return ep, nil
 }
 
+// 做读取操作
 func (ep *ExpectProcess) read() {
 	defer ep.wg.Done()
+
 	printDebugLines := os.Getenv("EXPECT_DEBUG") != ""
 	r := bufio.NewReader(ep.fpty)
 	for ep.err == nil {
 		l, rerr := r.ReadString('\n')
+
 		ep.mu.Lock()
 		ep.err = rerr
 		if l != "" {
 			if printDebugLines {
 				fmt.Printf("%s-%d: %s", ep.cmd.Path, ep.cmd.Process.Pid, l)
 			}
+
 			ep.lines = append(ep.lines, l)
 			ep.count++
 			if len(ep.lines) == 1 {
@@ -90,6 +108,7 @@ func (ep *ExpectProcess) read() {
 		}
 		ep.mu.Unlock()
 	}
+
 	ep.cond.Signal()
 }
 
@@ -116,6 +135,7 @@ func (ep *ExpectProcess) ExpectFunc(f func(string) bool) (string, error) {
 
 // Expect returns the first line containing the given string.
 func (ep *ExpectProcess) Expect(s string) (string, error) {
+
 	return ep.ExpectFunc(func(txt string) bool { return strings.Contains(txt, s) })
 }
 
@@ -124,6 +144,7 @@ func (ep *ExpectProcess) Expect(s string) (string, error) {
 func (ep *ExpectProcess) LineCount() int {
 	ep.mu.Lock()
 	defer ep.mu.Unlock()
+
 	return ep.count
 }
 
@@ -137,17 +158,24 @@ func (ep *ExpectProcess) Signal(sig os.Signal) error {
 
 // Close waits for the expect process to exit.
 func (ep *ExpectProcess) Close() error { return ep.close(false) }
-
 func (ep *ExpectProcess) close(kill bool) error {
+    // 异常了
 	if ep.cmd == nil {
 		return ep.err
 	}
+
+    // 发送停止信号
 	if kill {
 		ep.Signal(ep.StopSignal)
 	}
 
+    // 等待进程结束
 	err := ep.cmd.Wait()
+
+    // 关闭文件
 	ep.fpty.Close()
+
+    // 等待
 	ep.wg.Wait()
 
 	if err != nil {
@@ -159,6 +187,7 @@ func (ep *ExpectProcess) close(kill bool) error {
 			err = nil
 		}
 	}
+
 	ep.cmd = nil
 	return err
 }

@@ -21,24 +21,31 @@ import (
 
 // UniqueStrings returns a slice of randomly generated unique strings.
 func UniqueStrings(slen uint, n int) (ss []string) {
+    // 使用一个空结构，当成set
 	exist := make(map[string]struct{})
+
 	ss = make([]string, 0, n)
 	for len(ss) < n {
 		s := randString(slen)
+
 		if _, ok := exist[s]; !ok {
 			ss = append(ss, s)
 			exist[s] = struct{}{}
 		}
 	}
+
 	return ss
 }
 
 // RandomStrings returns a slice of randomly generated strings.
 func RandomStrings(slen uint, n int) (ss []string) {
+    // 申请空间
 	ss = make([]string, 0, n)
+
 	for i := 0; i < n; i++ {
 		ss = append(ss, randString(slen))
 	}
+
 	return ss
 }
 
@@ -46,9 +53,13 @@ const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
 func randString(l uint) string {
 	rand.Seed(time.Now().UnixNano())
+
+    // 创建
 	s := make([]byte, l)
 	for i := 0; i < int(l); i++ {
+	    // 随机选择一个字符
 		s[i] = chars[rand.Intn(len(chars))]
 	}
+
 	return string(s)
 }

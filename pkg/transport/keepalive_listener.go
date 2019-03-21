@@ -21,8 +21,12 @@ import (
 	"time"
 )
 
+// 保活链接接口
 type keepAliveConn interface {
+	// 设置保活
 	SetKeepAlive(bool) error
+
+	// 在周期内保活
 	SetKeepAlivePeriod(d time.Duration) error
 }
 

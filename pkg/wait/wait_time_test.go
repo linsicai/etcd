@@ -54,6 +54,7 @@ func TestWaitTime(t *testing.T) {
 	}
 }
 
+// 功能测试
 func TestWaitTestStress(t *testing.T) {
 	chs := make([]<-chan struct{}, 0)
 
@@ -74,7 +75,7 @@ func TestWaitTestStress(t *testing.T) {
 	}
 }
 
-// 测试创建
+// 性能测试
 func BenchmarkWaitTime(b *testing.B) {
 	wt := NewTimeList()
 
@@ -83,7 +84,7 @@ func BenchmarkWaitTime(b *testing.B) {
 	}
 }
 
-// 测试创建与触发
+// 性能测试
 func BenchmarkTriggerAnd10KWaitTime(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		wt := NewTimeList()

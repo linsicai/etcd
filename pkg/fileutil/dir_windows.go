@@ -32,18 +32,24 @@ func OpenDir(path string) (*os.File, error) {
 }
 
 func openDir(path string) (fd syscall.Handle, err error) {
+    // 空路径
 	if len(path) == 0 {
 		return syscall.InvalidHandle, syscall.ERROR_FILE_NOT_FOUND
 	}
 
+    // 路径转utf8
 	pathp, err := syscall.UTF16PtrFromString(path)
 	if err != nil {
 		return syscall.InvalidHandle, err
 	}
 
+    // 权限
 	access := uint32(syscall.GENERIC_READ | syscall.GENERIC_WRITE)
 	sharemode := uint32(syscall.FILE_SHARE_READ | syscall.FILE_SHARE_WRITE)
 	createmode := uint32(syscall.OPEN_EXISTING)
+
 	fl := uint32(syscall.FILE_FLAG_BACKUP_SEMANTICS)
+
+    // 创建文件
 	return syscall.CreateFile(pathp, access, sharemode, nil, createmode, fl, 0)
 }

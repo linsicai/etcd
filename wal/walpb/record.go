@@ -17,9 +17,11 @@ package walpb
 import "errors"
 
 var (
+    // 异常
 	ErrCRCMismatch = errors.New("walpb: crc mismatch")
 )
 
+// 校验记录的crc，如果不正确，reset记录
 func (rec *Record) Validate(crc uint32) error {
 	if rec.Crc == crc {
 		return nil

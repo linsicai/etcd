@@ -24,22 +24,27 @@ import (
 	"github.com/coreos/pkg/capnslog"
 )
 
+// 文件权限
 const (
 	// PrivateFileMode grants owner to read/write a file.
 	PrivateFileMode = 0600
+
 	// PrivateDirMode grants owner to make/remove files inside the directory.
 	PrivateDirMode = 0700
 )
 
+// 日志
 var plog = capnslog.NewPackageLogger("go.etcd.io/etcd", "pkg/fileutil")
 
 // IsDirWriteable checks if dir is writable by writing and removing a file
 // to dir. It returns nil if dir is writable.
+// 判断目录是否可读，写一个touch文件
 func IsDirWriteable(dir string) error {
 	f := filepath.Join(dir, ".touch")
 	if err := ioutil.WriteFile(f, []byte(""), PrivateFileMode); err != nil {
 		return err
 	}
+
 	return os.Remove(f)
 }
 
@@ -54,6 +59,7 @@ func TouchDirAll(dir string) error {
 		// a directory, this will return syscall.ENOTDIR
 		return err
 	}
+
 	return IsDirWriteable(dir)
 }
 
@@ -61,22 +67,26 @@ func TouchDirAll(dir string) error {
 // if the deepest directory was not empty.
 func CreateDirAll(dir string) error {
 	err := TouchDirAll(dir)
+
 	if err == nil {
 		var ns []string
 		ns, err = ReadDir(dir)
 		if err != nil {
 			return err
 		}
+
 		if len(ns) != 0 {
 			err = fmt.Errorf("expected %q to be empty, got %q", dir, ns)
 		}
 	}
+
 	return err
 }
 
 // Exist returns true if a file or directory exists.
 func Exist(name string) bool {
 	_, err := os.Stat(name)
+
 	return err == nil
 }
 
@@ -88,17 +98,21 @@ func ZeroToEnd(f *os.File) error {
 	if err != nil {
 		return err
 	}
+
 	lenf, lerr := f.Seek(0, io.SeekEnd)
 	if lerr != nil {
 		return lerr
 	}
+
 	if err = f.Truncate(off); err != nil {
 		return err
 	}
+
 	// make sure blocks remain allocated
 	if err = Preallocate(f, lenf, true); err != nil {
 		return err
 	}
+
 	_, err = f.Seek(off, io.SeekStart)
 	return err
 }

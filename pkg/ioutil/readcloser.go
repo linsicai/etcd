@@ -39,28 +39,38 @@ func NewExactReadCloser(rc io.ReadCloser, totalBytes int64) io.ReadCloser {
 
 type exactReadCloser struct {
 	rc         io.ReadCloser
+
 	br         int64
 	totalBytes int64
 }
 
 func (e *exactReadCloser) Read(p []byte) (int, error) {
 	n, err := e.rc.Read(p)
+
+    // 读多了
 	e.br += int64(n)
 	if e.br > e.totalBytes {
 		return 0, ErrExpectEOF
 	}
+
+    // 读少了
 	if e.br < e.totalBytes && n == 0 {
 		return 0, ErrShortRead
 	}
+
 	return n, err
 }
 
 func (e *exactReadCloser) Close() error {
+    // 关闭
 	if err := e.rc.Close(); err != nil {
 		return err
 	}
+
+    // 未读完
 	if e.br < e.totalBytes {
 		return ErrShortRead
 	}
+
 	return nil
 }

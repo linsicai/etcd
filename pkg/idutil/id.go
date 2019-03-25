@@ -49,14 +49,21 @@ const (
 type Generator struct {
 	// high order 2 bytes
 	prefix uint64
+
 	// low order 6 bytes
 	suffix uint64
 }
 
 func NewGenerator(memberID uint16, now time.Time) *Generator {
+    // 固定
 	prefix := uint64(memberID) << suffixLen
+
+    // 计算当前的ms数
 	unixMilli := uint64(now.UnixNano()) / uint64(time.Millisecond/time.Nanosecond)
+
+    // 计算初始的suffix
 	suffix := lowbit(unixMilli, tsLen) << cntLen
+
 	return &Generator{
 		prefix: prefix,
 		suffix: suffix,
@@ -65,7 +72,10 @@ func NewGenerator(memberID uint16, now time.Time) *Generator {
 
 // Next generates a id that is unique.
 func (g *Generator) Next() uint64 {
+    // 加锁加1
 	suffix := atomic.AddUint64(&g.suffix, 1)
+
+    // 拼ID
 	id := g.prefix | lowbit(suffix, suffixLen)
 	return id
 }

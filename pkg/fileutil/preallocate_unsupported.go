@@ -22,6 +22,7 @@ func preallocExtend(f *os.File, sizeInBytes int64) error {
 	return preallocExtendTrunc(f, sizeInBytes)
 }
 
+// 定长文件
 func preallocFixed(f *os.File, sizeInBytes int64) error {
     return nil
 }

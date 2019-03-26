@@ -25,30 +25,42 @@ import (
 // If the operation is unsupported, no error will be returned.
 // Otherwise, the error encountered will be returned.
 func Preallocate(f *os.File, sizeInBytes int64, extendFile bool) error {
+    // pass 文件大小为零
 	if sizeInBytes == 0 {
 		// fallocate will return EINVAL if length is 0; skip
 		return nil
 	}
+
+    // 可扩展文件
 	if extendFile {
 		return preallocExtend(f, sizeInBytes)
 	}
+
+    // 定长文件
 	return preallocFixed(f, sizeInBytes)
 }
 
 func preallocExtendTrunc(f *os.File, sizeInBytes int64) error {
+    // 当前位置
 	curOff, err := f.Seek(0, io.SeekCurrent)
 	if err != nil {
 		return err
 	}
+
+    // 文件尾
 	size, err := f.Seek(sizeInBytes, io.SeekEnd)
 	if err != nil {
 		return err
 	}
+
+    // 
 	if _, err = f.Seek(curOff, io.SeekStart); err != nil {
 		return err
 	}
+
 	if sizeInBytes > size {
 		return nil
 	}
+
 	return f.Truncate(sizeInBytes)
 }

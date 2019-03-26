@@ -24,7 +24,7 @@ var (
 	ErrLocked = errors.New("fileutil: file already locked")
 )
 
-// 
+// 带锁文件
 type LockedFile struct {
     *os.File
 }

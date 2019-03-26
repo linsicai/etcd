@@ -21,24 +21,24 @@ import "io"
 // but limits the amount of data returned to at most n bytes.
 func NewLimitedBufferReader(r io.Reader, n int) io.Reader {
     // 地址相关？
-	return &limitedBufferReader{
-		r: r,
-		n: n,
-	}
+    return &limitedBufferReader{
+        r: r,
+        n: n,
+    }
 }
 
 type limitedBufferReader struct {
-	r io.Reader
+    r io.Reader
 
-	n int
+    n int
 }
 
 func (r *limitedBufferReader) Read(p []byte) (n int, err error) {
     // 调整切片
-	np := p
-	if len(np) > r.n {
-		np = np[:r.n]
-	}
+    np := p
+    if len(np) > r.n {
+        np = np[:r.n]
+    }
 
-	return r.r.Read(np)
+    return r.r.Read(np)
 }

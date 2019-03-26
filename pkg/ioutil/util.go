@@ -15,10 +15,10 @@
 package ioutil
 
 import (
-	"io"
-	"os"
+    "io"
+    "os"
 
-	"go.etcd.io/etcd/pkg/fileutil"
+    "go.etcd.io/etcd/pkg/fileutil"
 )
 
 // WriteAndSyncFile behaves just like ioutil.WriteFile in the standard library,
@@ -26,26 +26,26 @@ import (
 // is synced if there is no error returned.
 func WriteAndSyncFile(filename string, data []byte, perm os.FileMode) error {
     // 打开文件
-	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm)
-	if err != nil {
-		return err
-	}
+    f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm)
+    if err != nil {
+        return err
+    }
 
     // 写数据
-	n, err := f.Write(data)
-	if err == nil && n < len(data) {
-		err = io.ErrShortWrite
-	}
+    n, err := f.Write(data)
+    if err == nil && n < len(data) {
+        err = io.ErrShortWrite
+    }
 
     // 刷盘
-	if err == nil {
-		err = fileutil.Fsync(f)
-	}
+    if err == nil {
+        err = fileutil.Fsync(f)
+    }
 
     // 关闭文件
-	if err1 := f.Close(); err == nil {
-		err = err1
-	}
+    if err1 := f.Close(); err == nil {
+        err = err1
+    }
 
-	return err
+    return err
 }

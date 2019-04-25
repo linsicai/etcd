@@ -34,5 +34,6 @@ func FDUsage() (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
+
 	return uint64(len(fds)), nil
 }

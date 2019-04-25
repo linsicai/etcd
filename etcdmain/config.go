@@ -36,6 +36,7 @@ import (
 )
 
 var (
+    // 代理配置值
 	proxyFlagOff      = "off"
 	proxyFlagReadonly = "readonly"
 	proxyFlagOn       = "on"
@@ -63,6 +64,7 @@ var (
 	}
 )
 
+// 代理配置
 type configProxy struct {
 	ProxyFailureWaitMs     uint `json:"proxy-failure-wait"`
 	ProxyRefreshIntervalMs uint `json:"proxy-refresh-interval"`
@@ -392,6 +394,7 @@ func (cfg *config) validate() error {
 	return err
 }
 
+// 代理模式
 func (cfg config) isProxy() bool               { return cfg.cf.proxy.String() != proxyFlagOff }
 func (cfg config) isReadonlyProxy() bool       { return cfg.cf.proxy.String() == proxyFlagReadonly }
 func (cfg config) shouldFallbackToProxy() bool { return cfg.cf.fallback.String() == fallbackFlagProxy }

@@ -20,10 +20,12 @@ import "net"
 // Returns an error if dial failed, whichi indicates journald is not available
 // (e.g. run embedded etcd as docker daemon).
 // Reference: https://github.com/coreos/go-systemd/blob/master/journal/journal.go.
+// 测试一下
 func DialJournal() error {
 	conn, err := net.Dial("unixgram", "/run/systemd/journal/socket")
 	if conn != nil {
 		defer conn.Close()
 	}
+
 	return err
 }

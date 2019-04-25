@@ -19,6 +19,7 @@ import (
 	"math"
 )
 
+// 比较接口
 // Comparable is an interface for trichotomic comparisons.
 type Comparable interface {
 	// Compare gives the result of a 3-way comparison
@@ -28,8 +29,8 @@ type Comparable interface {
 	Compare(c Comparable) int
 }
 
+// 颜色
 type rbcolor int
-
 const (
 	black rbcolor = iota
 	red

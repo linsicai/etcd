@@ -14,6 +14,7 @@ import (
 // The size of a CRC-32 checksum in bytes.
 const Size = 4
 
+// crc 计算类，写时计算crc
 type digest struct {
 	crc uint32
 	tab *crc32.Table
@@ -39,6 +40,7 @@ func (d *digest) Write(p []byte) (n int, err error) {
 
 func (d *digest) Sum32() uint32 { return d.crc }
 
+// 附加在结尾
 func (d *digest) Sum(in []byte) []byte {
 	s := d.Sum32()
 	return append(in, byte(s>>24), byte(s>>16), byte(s>>8), byte(s))

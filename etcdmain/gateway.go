@@ -104,6 +104,7 @@ func startGateway(cmd *cobra.Command, args []string) {
 		// no endpoints discovered, fall back to provided endpoints
 		srvs.Endpoints = gatewayEndpoints
 	}
+
 	// Strip the schema from the endpoints because we start just a TCP proxy
 	srvs.Endpoints = stripSchema(srvs.Endpoints)
 	if len(srvs.SRVs) == 0 {

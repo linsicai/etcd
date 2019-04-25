@@ -33,33 +33,43 @@ var (
 
 // GetCluster gets the cluster information via DNS discovery.
 // Also sees each entry as a separate instance.
+// 通过dns 或者 接入点获取地址
 func GetCluster(serviceScheme, service, name, dns string, apurls types.URLs) ([]string, error) {
 	tempName := int(0)
 	tcp2ap := make(map[string]url.URL)
 
+    // 解析接入点url
 	// First, resolve the apurls
 	for _, url := range apurls {
 		tcpAddr, err := resolveTCPAddr("tcp", url.Host)
 		if err != nil {
 			return nil, err
 		}
+
 		tcp2ap[tcpAddr.String()] = url
 	}
 
 	stringParts := []string{}
 	updateNodeMap := func(service, scheme string) error {
+	    // dns 查找服务，返回cname、地址、错误
 		_, addrs, err := lookupSRV(service, "tcp", dns)
 		if err != nil {
 			return err
 		}
+
 		for _, srv := range addrs {
+		    // 计算出host
 			port := fmt.Sprintf("%d", srv.Port)
 			host := net.JoinHostPort(srv.Target, port)
+
+            // 解析host
 			tcpAddr, terr := resolveTCPAddr("tcp", host)
 			if terr != nil {
 				err = terr
 				continue
 			}
+
+            // 判断地址重复
 			n := ""
 			url, ok := tcp2ap[tcpAddr.String()]
 			if ok {
@@ -69,6 +79,8 @@ func GetCluster(serviceScheme, service, name, dns string, apurls types.URLs) ([]
 				n = fmt.Sprintf("%d", tempName)
 				tempName++
 			}
+
+            // 拼kv，顺带判断scheme
 			// SRV records have a trailing dot but URL shouldn't.
 			shortHost := strings.TrimSuffix(srv.Target, ".")
 			urlHost := net.JoinHostPort(shortHost, port)
@@ -78,16 +90,21 @@ func GetCluster(serviceScheme, service, name, dns string, apurls types.URLs) ([]
 				stringParts = append(stringParts, fmt.Sprintf("%s=%s://%s", n, scheme, urlHost))
 			}
 		}
+
+        // 返回最后的错误吗
 		if len(stringParts) == 0 {
 			return err
 		}
+
 		return nil
 	}
 
+    // 
 	err := updateNodeMap(service, serviceScheme)
 	if err != nil {
 		return nil, fmt.Errorf("error querying DNS SRV records for _%s %s", service, err)
 	}
+
 	return stringParts, nil
 }
 
@@ -102,20 +119,25 @@ func GetClient(service, domain string, serviceName string) (*SRVClients, error) 
 	var srvs []*net.SRV
 
 	updateURLs := func(service, scheme string) error {
+	    // dns 查找
 		_, addrs, err := lookupSRV(service, "tcp", domain)
 		if err != nil {
 			return err
 		}
+
+        // 地址转url
 		for _, srv := range addrs {
 			urls = append(urls, &url.URL{
 				Scheme: scheme,
 				Host:   net.JoinHostPort(srv.Target, fmt.Sprintf("%d", srv.Port)),
 			})
 		}
+
 		srvs = append(srvs, addrs...)
 		return nil
 	}
 
+    // 双通道
 	errHTTPS := updateURLs(GetSRVService(service, serviceName, "https"), "https")
 	errHTTP := updateURLs(GetSRVService(service, serviceName, "http"), "http")
 
@@ -123,6 +145,7 @@ func GetClient(service, domain string, serviceName string) (*SRVClients, error) 
 		return nil, fmt.Errorf("dns lookup errors: %s and %s", errHTTPS, errHTTP)
 	}
 
+    // 输出转换
 	endpoints := make([]string, len(urls))
 	for i := range urls {
 		endpoints[i] = urls[i].String()
@@ -131,6 +154,7 @@ func GetClient(service, domain string, serviceName string) (*SRVClients, error) 
 }
 
 // 服务-服务名
+// 服务-ssl-服务名
 // GetSRVService generates a SRV service including an optional suffix.
 func GetSRVService(service, serviceName string, scheme string) (SRVService string) {
 	if scheme == "https" {

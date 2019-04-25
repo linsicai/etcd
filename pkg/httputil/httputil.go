@@ -43,9 +43,11 @@ func GetHostname(req *http.Request) string {
 	if req == nil {
 		return ""
 	}
+
 	h, _, err := net.SplitHostPort(req.Host)
 	if err != nil {
 		return req.Host
 	}
+
 	return h
 }

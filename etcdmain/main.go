@@ -25,15 +25,20 @@ import (
 )
 
 func Main() {
+    // 验证架构
 	checkSupportArch()
 
 	if len(os.Args) > 1 {
 		cmd := os.Args[1]
+
+     
+        // cov
 		if covArgs := os.Getenv("ETCDCOV_ARGS"); len(covArgs) > 0 {
 			args := strings.Split(os.Getenv("ETCDCOV_ARGS"), "\xe7\xcd")[1:]
 			rootCmd.SetArgs(args)
 			cmd = "grpc-proxy"
 		}
+
 		switch cmd {
 		case "gateway", "grpc-proxy":
 			if err := rootCmd.Execute(); err != nil {
@@ -48,6 +53,7 @@ func Main() {
 }
 
 func notifySystemd(lg *zap.Logger) {
+    // 看是否在执行
 	if !systemdutil.IsRunningSystemd() {
 		return
 	}

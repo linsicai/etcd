@@ -28,6 +28,7 @@ import (
 	"github.com/kr/pty"
 )
 
+// shell expect
 type ExpectProcess struct {
     // 命令
 	cmd  *exec.Cmd

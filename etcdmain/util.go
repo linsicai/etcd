@@ -24,10 +24,13 @@ import (
 	"go.uber.org/zap"
 )
 
+// 发现终端
 func discoverEndpoints(lg *zap.Logger, dns string, ca string, insecure bool, serviceName string) (s srv.SRVClients) {
 	if dns == "" {
 		return s
 	}
+
+    // 查找集群客户端
 	srvs, err := srv.GetClient("etcd-client", dns, serviceName)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -35,6 +38,7 @@ func discoverEndpoints(lg *zap.Logger, dns string, ca string, insecure bool, ser
 	}
 	endpoints := srvs.Endpoints
 
+    // 打印信息
 	if lg != nil {
 		lg.Info(
 			"discovered cluster from SRV",
@@ -45,15 +49,19 @@ func discoverEndpoints(lg *zap.Logger, dns string, ca string, insecure bool, ser
 		plog.Infof("discovered the cluster %s from %s", endpoints, dns)
 	}
 
+    // 安全通道则直接返回
 	if insecure {
 		return *srvs
 	}
+
+    // 配置加密参数
 	// confirm TLS connections are good
 	tlsInfo := transport.TLSInfo{
 		TrustedCAFile: ca,
 		ServerName:    dns,
 	}
 
+    // 验证中
 	if lg != nil {
 		lg.Info(
 			"validating discovered SRV endpoints",
@@ -64,6 +72,7 @@ func discoverEndpoints(lg *zap.Logger, dns string, ca string, insecure bool, ser
 		plog.Infof("validating discovered endpoints %v", endpoints)
 	}
 
+    // 验证
 	endpoints, err = transport.ValidateSecureEndpoints(tlsInfo, endpoints)
 	if err != nil {
 		if lg != nil {

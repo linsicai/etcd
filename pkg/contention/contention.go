@@ -55,7 +55,7 @@ func (td *TimeoutDetector) Reset() {
 }
 
 // 如果没入，插入
-// 如果有，看是否超时和经过时间
+// 如果有，返回是否超时和经过时间
 // Observe observes an event for given id. It returns false and exceeded duration
 // if the interval is longer than the expectation.
 func (td *TimeoutDetector) Observe(which uint64) (bool, time.Duration) {
@@ -72,6 +72,7 @@ func (td *TimeoutDetector) Observe(which uint64) (bool, time.Duration) {
 			ok = false
 		}
 	}
+
 	td.records[which] = now
 	return ok, exceed
 }

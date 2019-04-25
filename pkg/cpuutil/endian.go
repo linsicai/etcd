@@ -20,7 +20,7 @@ import (
 )
 
 // int类型与机器相关
-// 此次计算int 占用长度
+// 计算int 占用长度
 const intWidth int = int(unsafe.Sizeof(0))
 
 // 字节序

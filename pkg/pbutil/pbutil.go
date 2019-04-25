@@ -31,9 +31,11 @@ type Unmarshaler interface {
 
 func MustMarshal(m Marshaler) []byte {
 	d, err := m.Marshal()
+
 	if err != nil {
 		plog.Panicf("marshal should never fail (%v)", err)
 	}
+
 	return d
 }
 
@@ -54,6 +56,7 @@ func GetBool(v *bool) (vv bool, set bool) {
 	if v == nil {
 		return false, false
 	}
+
 	return *v, true
 }
 

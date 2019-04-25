@@ -22,6 +22,7 @@ import (
 
 const HTTPPrefixPProf = "/debug/pprof"
 
+// http 路径 to 处理函数
 // PProfHandlers returns a map of pprof handlers keyed by the HTTP path.
 func PProfHandlers() map[string]http.Handler {
 	// set only when there's no existing setting

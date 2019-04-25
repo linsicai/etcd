@@ -28,22 +28,29 @@ import (
 // Repair tries to repair ErrUnexpectedEOF in the
 // last wal file by truncating.
 func Repair(lg *zap.Logger, dirpath string) bool {
+    // 打开最后一个文件
     f, err := openLast(lg, dirpath)
     if err != nil {
         return false
     }
     defer f.Close()
 
+    // 事前日志
     if lg != nil {
         lg.Info("repairing", zap.String("path", f.Name()))
     } else {
         plog.Noticef("repairing %v", f.Name())
     }
 
+    // 申请记录
     rec := &walpb.Record{}
+
+    // 解析器
     decoder := newDecoder(f)
     for {
+        // 最后的offset
         lastOffset := decoder.lastOffset()
+
         err := decoder.decode(rec)
         switch err {
         case nil:
@@ -132,10 +139,15 @@ func Repair(lg *zap.Logger, dirpath string) bool {
 
 // openLast opens the last wal file for read and write.
 func openLast(lg *zap.Logger, dirpath string) (*fileutil.LockedFile, error) {
+    // 加载文件列表
     names, err := readWALNames(lg, dirpath)
     if err != nil {
         return nil, err
     }
+
+    // 去最后一个
     last := filepath.Join(dirpath, names[len(names)-1])
+
+    // 加锁返回
     return fileutil.LockFile(last, os.O_RDWR, fileutil.PrivateFileMode)
 }

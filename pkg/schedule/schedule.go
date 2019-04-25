@@ -21,6 +21,7 @@ import (
 
 type Job func(context.Context)
 
+// 调度接口
 // Scheduler can schedule jobs.
 type Scheduler interface {
 	// Schedule asks the scheduler to schedule a job defined by the given func.

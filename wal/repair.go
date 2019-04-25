@@ -63,17 +63,21 @@ func Repair(lg *zap.Logger, dirpath string) bool {
                 if crc != 0 && rec.Validate(crc) != nil {
                     return false
                 }
+
+                // 更新crc
                 decoder.updateCRC(rec.Crc)
             }
             continue
 
         case io.EOF:
+            // 修复成功
             if lg != nil {
                 lg.Info("repaired", zap.String("path", f.Name()), zap.Error(io.EOF))
             }
             return true
 
         case io.ErrUnexpectedEOF:
+            // 创建备份文件
             bf, bferr := os.Create(f.Name() + ".broken")
             if bferr != nil {
                 if lg != nil {
@@ -85,6 +89,7 @@ func Repair(lg *zap.Logger, dirpath string) bool {
             }
             defer bf.Close()
 
+            // 定位至源文件开始位置
             if _, err = f.Seek(0, io.SeekStart); err != nil {
                 if lg != nil {
                     lg.Warn("failed to read file", zap.String("path", f.Name()), zap.Error(err))
@@ -94,6 +99,7 @@ func Repair(lg *zap.Logger, dirpath string) bool {
                 return false
             }
 
+            // 备份原文件
             if _, err = io.Copy(bf, f); err != nil {
                 if lg != nil {
                     lg.Warn("failed to copy", zap.String("from", f.Name()+".broken"), zap.String("to", f.Name()), zap.Error(err))
@@ -103,6 +109,7 @@ func Repair(lg *zap.Logger, dirpath string) bool {
                 return false
             }
 
+            // truncate 文件尾
             if err = f.Truncate(lastOffset); err != nil {
                 if lg != nil {
                     lg.Warn("failed to truncate", zap.String("path", f.Name()), zap.Error(err))
@@ -112,6 +119,7 @@ func Repair(lg *zap.Logger, dirpath string) bool {
                 return false
             }
 
+            // 刷盘
             if err = fileutil.Fsync(f.File); err != nil {
                 if lg != nil {
                     lg.Warn("failed to fsync", zap.String("path", f.Name()), zap.Error(err))
@@ -124,9 +132,12 @@ func Repair(lg *zap.Logger, dirpath string) bool {
             if lg != nil {
                 lg.Info("repaired", zap.String("path", f.Name()), zap.Error(io.ErrUnexpectedEOF))
             }
+
+            // 修复成功
             return true
 
         default:
+            // 修复失败
             if lg != nil {
                 lg.Warn("failed to repair", zap.String("path", f.Name()), zap.Error(err))
             } else {
@@ -145,7 +156,7 @@ func openLast(lg *zap.Logger, dirpath string) (*fileutil.LockedFile, error) {
         return nil, err
     }
 
-    // 去最后一个
+    // 取最后一个
     last := filepath.Join(dirpath, names[len(names)-1])
 
     // 加锁返回

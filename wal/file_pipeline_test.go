@@ -57,15 +57,18 @@ func TestFilePipelineFailPreallocate(t *testing.T) {
 }
 
 func TestFilePipelineFailLockFile(t *testing.T) {
+    // 创建临时文件
     tdir, err := ioutil.TempDir(os.TempDir(), "wal-test")
     if err != nil {
         t.Fatal(err)
     }
     os.RemoveAll(tdir)
 
+    // 创建后关闭
     fp := newFilePipeline(zap.NewExample(), tdir, math.MaxInt64)
     defer fp.Close()
 
+    // 预期open失败或出错
     f, ferr := fp.Open()
     if f != nil || ferr == nil { // no such file or directory
         t.Fatal("expected error on invalid pre-allocate size, but no error")

@@ -9,7 +9,7 @@ option (gogoproto.sizer_all) = true;
 option (gogoproto.unmarshaler_all) = true;
 option (gogoproto.goproto_getters_all) = false;
 
-// 记录
+// ====> WAL 记录
 // 类型
 // crc
 // 数据
@@ -19,7 +19,7 @@ message Record {
 	optional bytes data  = 3;
 }
 
-// 快照
+// ====> 快照
 // 索引
 // term ？？？
 message Snapshot {

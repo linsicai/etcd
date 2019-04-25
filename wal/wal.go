@@ -36,10 +36,19 @@ import (
 )
 
 const (
+    // 元信息
     metadataType int64 = iota + 1
+
+    // 实体类型
     entryType
+
+    // 状态类型
     stateType
+
+    // crc 类型
     crcType
+
+    // 快照类型
     snapshotType
 
     // warnSyncDuration is the amount of time allotted to an fsync before
@@ -61,6 +70,7 @@ var (
     ErrCRCMismatch      = errors.New("wal: crc mismatch")
     ErrSnapshotMismatch = errors.New("wal: snapshot mismatch")
     ErrSnapshotNotFound = errors.New("wal: snapshot not found")
+
     crcTable            = crc32.MakeTable(crc32.Castagnoli)
 )
 
@@ -754,30 +764,39 @@ func (w *WAL) tail() *fileutil.LockedFile {
     if len(w.locks) > 0 {
         return w.locks[len(w.locks)-1]
     }
+
     return nil
 }
 
+// 序列号
 func (w *WAL) seq() uint64 {
     t := w.tail()
     if t == nil {
+        // 如果无数据，从0开始
         return 0
     }
+
+    // 解析序号
     seq, _, err := parseWALName(filepath.Base(t.Name()))
     if err != nil {
+        // 出错了
         if w.lg != nil {
             w.lg.Fatal("failed to parse WAL name", zap.String("name", t.Name()), zap.Error(err))
         } else {
             plog.Fatalf("bad wal name %s (%v)", t.Name(), err)
         }
     }
+
     return seq
 }
 
 func closeAll(rcs ...io.ReadCloser) error {
+    // 关闭所有
     for _, f := range rcs {
         if err := f.Close(); err != nil {
             return err
         }
     }
+
     return nil
 }

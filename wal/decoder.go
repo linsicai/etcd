@@ -36,13 +36,13 @@ type decoder struct {
     // 锁
     mu  sync.Mutex
 
-
     // buffer 读数组
     brs []*bufio.Reader
 
     // lastValidOff file offset following the last valid decoded record
     lastValidOff int64
 
+    // crc
     crc          hash.Hash32
 }
 
@@ -63,6 +63,7 @@ func (d *decoder) decode(rec *walpb.Record) error {
     // 记录初始化
     rec.Reset()
 
+    // 加锁
     d.mu.Lock()
     defer d.mu.Unlock()
 

@@ -37,6 +37,8 @@ func TestRepairTruncate(t *testing.T) {
             return err
         }
         defer f.Close()
+
+        // 偏移量少4，预期少一个块
         return f.Truncate(offset - 4)
     }
 
@@ -44,6 +46,7 @@ func TestRepairTruncate(t *testing.T) {
 }
 
 func testRepair(t *testing.T, ents [][]raftpb.Entry, corrupt corruptFunc, expectedEnts int) {
+    // 创建临时目录
     p, err := ioutil.TempDir(os.TempDir(), "waltest")
     if err != nil {
         t.Fatal(err)
@@ -53,6 +56,7 @@ func testRepair(t *testing.T, ents [][]raftpb.Entry, corrupt corruptFunc, expect
     // create WAL
     w, err := Create(zap.NewExample(), p, nil)
     defer func() {
+        // 关闭文件
         if err = w.Close(); err != nil {
             t.Fatal(err)
         }
@@ -61,23 +65,27 @@ func testRepair(t *testing.T, ents [][]raftpb.Entry, corrupt corruptFunc, expect
         t.Fatal(err)
     }
 
+    // 写数据
     for _, es := range ents {
         if err = w.Save(raftpb.HardState{}, es); err != nil {
             t.Fatal(err)
         }
     }
 
+    // 计算偏移量
     offset, err := w.tail().Seek(0, io.SeekCurrent)
     if err != nil {
         t.Fatal(err)
     }
     w.Close()
 
+    // 错误模拟
     err = corrupt(p, offset)
     if err != nil {
         t.Fatal(err)
     }
 
+    // 创建WAL，读取文件，预期错误
     // verify we broke the wal
     w, err = Open(zap.NewExample(), p, walpb.Snapshot{})
     if err != nil {
@@ -89,11 +97,13 @@ func testRepair(t *testing.T, ents [][]raftpb.Entry, corrupt corruptFunc, expect
     }
     w.Close()
 
+    // 修复错误文件
     // repair the wal
     if ok := Repair(zap.NewExample(), p); !ok {
         t.Fatalf("'Repair' returned '%v', want 'true'", ok)
     }
 
+    // 再读取，预期成功
     // read it back
     w, err = Open(zap.NewExample(), p, walpb.Snapshot{})
     if err != nil {
@@ -107,6 +117,7 @@ func testRepair(t *testing.T, ents [][]raftpb.Entry, corrupt corruptFunc, expect
         t.Fatalf("len(ents) = %d, want %d", len(walEnts), expectedEnts)
     }
 
+    // 接着写
     // write some more entries to repaired log
     for i := 1; i <= 10; i++ {
         es := []raftpb.Entry{{Index: uint64(expectedEnts + i)}}
@@ -116,6 +127,7 @@ func testRepair(t *testing.T, ents [][]raftpb.Entry, corrupt corruptFunc, expect
     }
     w.Close()
 
+    // 写打开，预期成功
     // read back entries following repair, ensure it's all there
     w, err = Open(zap.NewExample(), p, walpb.Snapshot{})
     if err != nil {
@@ -146,15 +158,19 @@ func TestRepairWriteTearLast(t *testing.T) {
             return err
         }
         defer f.Close()
+
         // 512 bytes perfectly aligns the last record, so use 1024
         if offset < 1024 {
             return fmt.Errorf("got offset %d, expected >1024", offset)
         }
+
         if terr := f.Truncate(1024); terr != nil {
             return terr
         }
+
         return f.Truncate(offset)
     }
+
     testRepair(t, makeEnts(50), corruptf, 40)
 }
 
@@ -167,19 +183,24 @@ func TestRepairWriteTearMiddle(t *testing.T) {
             return err
         }
         defer f.Close()
+
         // corrupt middle of 2nd record
         _, werr := f.WriteAt(make([]byte, 512), 4096+512)
         return werr
     }
+
     ents := makeEnts(5)
+
     // 4096 bytes of data so a middle sector is easy to corrupt
     dat := make([]byte, 4096)
     for i := range dat {
         dat[i] = byte(i)
     }
+
     for i := range ents {
         ents[i][0].Data = dat
     }
+
     testRepair(t, ents, corruptf, 1)
 }
 

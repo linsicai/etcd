@@ -15,15 +15,15 @@
 package etcdmain
 
 import (
-	"fmt"
-	"strconv"
+    "fmt"
+    "strconv"
 
-	"go.etcd.io/etcd/embed"
-	"golang.org/x/crypto/bcrypt"
+    "go.etcd.io/etcd/embed"
+    "golang.org/x/crypto/bcrypt"
 )
 
 var (
-	usageline = `Usage:
+    usageline = `Usage:
 
   etcd [flags]
     Start an etcd server.
@@ -43,7 +43,7 @@ var (
   etcd grpc-proxy
     Run the stateless etcd v3 gRPC L7 reverse proxy.
 `
-	flagsline = `
+    flagsline = `
 Member:
   --name 'default'
     Human-readable name for this member.

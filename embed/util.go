@@ -25,5 +25,6 @@ func isMemberInitialized(cfg *Config) bool {
 	if waldir == "" {
 		waldir = filepath.Join(cfg.Dir, "member", "wal")
 	}
+
 	return wal.Exist(waldir)
 }

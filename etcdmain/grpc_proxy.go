@@ -15,141 +15,141 @@
 package etcdmain
 
 import (
-	"context"
-	"fmt"
-	"io/ioutil"
-	"log"
-	"math"
-	"net"
-	"net/http"
-	"net/url"
-	"os"
-	"path/filepath"
-	"time"
+    "context"
+    "fmt"
+    "io/ioutil"
+    "log"
+    "math"
+    "net"
+    "net/http"
+    "net/url"
+    "os"
+    "path/filepath"
+    "time"
 
-	"go.etcd.io/etcd/clientv3"
-	"go.etcd.io/etcd/clientv3/leasing"
-	"go.etcd.io/etcd/clientv3/namespace"
-	"go.etcd.io/etcd/clientv3/ordering"
-	"go.etcd.io/etcd/etcdserver/api/etcdhttp"
-	"go.etcd.io/etcd/etcdserver/api/v3election/v3electionpb"
-	"go.etcd.io/etcd/etcdserver/api/v3lock/v3lockpb"
-	pb "go.etcd.io/etcd/etcdserver/etcdserverpb"
-	"go.etcd.io/etcd/pkg/debugutil"
-	"go.etcd.io/etcd/pkg/logutil"
-	"go.etcd.io/etcd/pkg/transport"
-	"go.etcd.io/etcd/proxy/grpcproxy"
+    "go.etcd.io/etcd/clientv3"
+    "go.etcd.io/etcd/clientv3/leasing"
+    "go.etcd.io/etcd/clientv3/namespace"
+    "go.etcd.io/etcd/clientv3/ordering"
+    "go.etcd.io/etcd/etcdserver/api/etcdhttp"
+    "go.etcd.io/etcd/etcdserver/api/v3election/v3electionpb"
+    "go.etcd.io/etcd/etcdserver/api/v3lock/v3lockpb"
+    pb "go.etcd.io/etcd/etcdserver/etcdserverpb"
+    "go.etcd.io/etcd/pkg/debugutil"
+    "go.etcd.io/etcd/pkg/logutil"
+    "go.etcd.io/etcd/pkg/transport"
+    "go.etcd.io/etcd/proxy/grpcproxy"
 
-	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
-	"github.com/soheilhy/cmux"
-	"github.com/spf13/cobra"
-	"go.uber.org/zap"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/grpclog"
+    grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
+    "github.com/soheilhy/cmux"
+    "github.com/spf13/cobra"
+    "go.uber.org/zap"
+    "google.golang.org/grpc"
+    "google.golang.org/grpc/grpclog"
 )
 
 var (
-	grpcProxyListenAddr            string
-	grpcProxyMetricsListenAddr     string
-	grpcProxyEndpoints             []string
-	grpcProxyDNSCluster            string
-	grpcProxyDNSClusterServiceName string
-	grpcProxyInsecureDiscovery     bool
-	grpcProxyDataDir               string
-	grpcMaxCallSendMsgSize         int
-	grpcMaxCallRecvMsgSize         int
+    grpcProxyListenAddr            string
+    grpcProxyMetricsListenAddr     string
+    grpcProxyEndpoints             []string
+    grpcProxyDNSCluster            string
+    grpcProxyDNSClusterServiceName string
+    grpcProxyInsecureDiscovery     bool
+    grpcProxyDataDir               string
+    grpcMaxCallSendMsgSize         int
+    grpcMaxCallRecvMsgSize         int
 
-	// tls for connecting to etcd
+    // tls for connecting to etcd
 
-	grpcProxyCA                    string
-	grpcProxyCert                  string
-	grpcProxyKey                   string
-	grpcProxyInsecureSkipTLSVerify bool
+    grpcProxyCA                    string
+    grpcProxyCert                  string
+    grpcProxyKey                   string
+    grpcProxyInsecureSkipTLSVerify bool
 
-	// tls for clients connecting to proxy
+    // tls for clients connecting to proxy
 
-	grpcProxyListenCA      string
-	grpcProxyListenCert    string
-	grpcProxyListenKey     string
-	grpcProxyListenAutoTLS bool
-	grpcProxyListenCRL     string
+    grpcProxyListenCA      string
+    grpcProxyListenCert    string
+    grpcProxyListenKey     string
+    grpcProxyListenAutoTLS bool
+    grpcProxyListenCRL     string
 
-	grpcProxyAdvertiseClientURL string
-	grpcProxyResolverPrefix     string
-	grpcProxyResolverTTL        int
+    grpcProxyAdvertiseClientURL string
+    grpcProxyResolverPrefix     string
+    grpcProxyResolverTTL        int
 
-	grpcProxyNamespace string
-	grpcProxyLeasing   string
+    grpcProxyNamespace string
+    grpcProxyLeasing   string
 
-	grpcProxyEnablePprof    bool
-	grpcProxyEnableOrdering bool
+    grpcProxyEnablePprof    bool
+    grpcProxyEnableOrdering bool
 
-	grpcProxyDebug bool
+    grpcProxyDebug bool
 )
 
 const defaultGRPCMaxCallSendMsgSize = 1.5 * 1024 * 1024
 
 func init() {
-	rootCmd.AddCommand(newGRPCProxyCommand())
+    rootCmd.AddCommand(newGRPCProxyCommand())
 }
 
 // newGRPCProxyCommand returns the cobra command for "grpc-proxy".
 func newGRPCProxyCommand() *cobra.Command {
-	lpc := &cobra.Command{
-		Use:   "grpc-proxy <subcommand>",
-		Short: "grpc-proxy related command",
-	}
-	lpc.AddCommand(newGRPCProxyStartCommand())
+    lpc := &cobra.Command{
+        Use:   "grpc-proxy <subcommand>",
+        Short: "grpc-proxy related command",
+    }
+    lpc.AddCommand(newGRPCProxyStartCommand())
 
-	return lpc
+    return lpc
 }
 
 func newGRPCProxyStartCommand() *cobra.Command {
-	cmd := cobra.Command{
-		Use:   "start",
-		Short: "start the grpc proxy",
-		Run:   startGRPCProxy,
-	}
+    cmd := cobra.Command{
+        Use:   "start",
+        Short: "start the grpc proxy",
+        Run:   startGRPCProxy,
+    }
 
-	cmd.Flags().StringVar(&grpcProxyListenAddr, "listen-addr", "127.0.0.1:23790", "listen address")
-	cmd.Flags().StringVar(&grpcProxyDNSCluster, "discovery-srv", "", "domain name to query for SRV records describing cluster endpoints")
-	cmd.Flags().StringVar(&grpcProxyDNSClusterServiceName, "discovery-srv-name", "", "service name to query when using DNS discovery")
-	cmd.Flags().StringVar(&grpcProxyMetricsListenAddr, "metrics-addr", "", "listen for /metrics requests on an additional interface")
-	cmd.Flags().BoolVar(&grpcProxyInsecureDiscovery, "insecure-discovery", false, "accept insecure SRV records")
-	cmd.Flags().StringSliceVar(&grpcProxyEndpoints, "endpoints", []string{"127.0.0.1:2379"}, "comma separated etcd cluster endpoints")
-	cmd.Flags().StringVar(&grpcProxyAdvertiseClientURL, "advertise-client-url", "127.0.0.1:23790", "advertise address to register (must be reachable by client)")
-	cmd.Flags().StringVar(&grpcProxyResolverPrefix, "resolver-prefix", "", "prefix to use for registering proxy (must be shared with other grpc-proxy members)")
-	cmd.Flags().IntVar(&grpcProxyResolverTTL, "resolver-ttl", 0, "specify TTL, in seconds, when registering proxy endpoints")
-	cmd.Flags().StringVar(&grpcProxyNamespace, "namespace", "", "string to prefix to all keys for namespacing requests")
-	cmd.Flags().BoolVar(&grpcProxyEnablePprof, "enable-pprof", false, `Enable runtime profiling data via HTTP server. Address is at client URL + "/debug/pprof/"`)
-	cmd.Flags().StringVar(&grpcProxyDataDir, "data-dir", "default.proxy", "Data directory for persistent data")
-	cmd.Flags().IntVar(&grpcMaxCallSendMsgSize, "max-send-bytes", defaultGRPCMaxCallSendMsgSize, "message send limits in bytes (default value is 1.5 MiB)")
-	cmd.Flags().IntVar(&grpcMaxCallRecvMsgSize, "max-recv-bytes", math.MaxInt32, "message receive limits in bytes (default value is math.MaxInt32)")
+    cmd.Flags().StringVar(&grpcProxyListenAddr, "listen-addr", "127.0.0.1:23790", "listen address")
+    cmd.Flags().StringVar(&grpcProxyDNSCluster, "discovery-srv", "", "domain name to query for SRV records describing cluster endpoints")
+    cmd.Flags().StringVar(&grpcProxyDNSClusterServiceName, "discovery-srv-name", "", "service name to query when using DNS discovery")
+    cmd.Flags().StringVar(&grpcProxyMetricsListenAddr, "metrics-addr", "", "listen for /metrics requests on an additional interface")
+    cmd.Flags().BoolVar(&grpcProxyInsecureDiscovery, "insecure-discovery", false, "accept insecure SRV records")
+    cmd.Flags().StringSliceVar(&grpcProxyEndpoints, "endpoints", []string{"127.0.0.1:2379"}, "comma separated etcd cluster endpoints")
+    cmd.Flags().StringVar(&grpcProxyAdvertiseClientURL, "advertise-client-url", "127.0.0.1:23790", "advertise address to register (must be reachable by client)")
+    cmd.Flags().StringVar(&grpcProxyResolverPrefix, "resolver-prefix", "", "prefix to use for registering proxy (must be shared with other grpc-proxy members)")
+    cmd.Flags().IntVar(&grpcProxyResolverTTL, "resolver-ttl", 0, "specify TTL, in seconds, when registering proxy endpoints")
+    cmd.Flags().StringVar(&grpcProxyNamespace, "namespace", "", "string to prefix to all keys for namespacing requests")
+    cmd.Flags().BoolVar(&grpcProxyEnablePprof, "enable-pprof", false, `Enable runtime profiling data via HTTP server. Address is at client URL + "/debug/pprof/"`)
+    cmd.Flags().StringVar(&grpcProxyDataDir, "data-dir", "default.proxy", "Data directory for persistent data")
+    cmd.Flags().IntVar(&grpcMaxCallSendMsgSize, "max-send-bytes", defaultGRPCMaxCallSendMsgSize, "message send limits in bytes (default value is 1.5 MiB)")
+    cmd.Flags().IntVar(&grpcMaxCallRecvMsgSize, "max-recv-bytes", math.MaxInt32, "message receive limits in bytes (default value is math.MaxInt32)")
 
-	// client TLS for connecting to server
-	cmd.Flags().StringVar(&grpcProxyCert, "cert", "", "identify secure connections with etcd servers using this TLS certificate file")
-	cmd.Flags().StringVar(&grpcProxyKey, "key", "", "identify secure connections with etcd servers using this TLS key file")
-	cmd.Flags().StringVar(&grpcProxyCA, "cacert", "", "verify certificates of TLS-enabled secure etcd servers using this CA bundle")
-	cmd.Flags().BoolVar(&grpcProxyInsecureSkipTLSVerify, "insecure-skip-tls-verify", false, "skip authentication of etcd server TLS certificates")
+    // client TLS for connecting to server
+    cmd.Flags().StringVar(&grpcProxyCert, "cert", "", "identify secure connections with etcd servers using this TLS certificate file")
+    cmd.Flags().StringVar(&grpcProxyKey, "key", "", "identify secure connections with etcd servers using this TLS key file")
+    cmd.Flags().StringVar(&grpcProxyCA, "cacert", "", "verify certificates of TLS-enabled secure etcd servers using this CA bundle")
+    cmd.Flags().BoolVar(&grpcProxyInsecureSkipTLSVerify, "insecure-skip-tls-verify", false, "skip authentication of etcd server TLS certificates")
 
-	// client TLS for connecting to proxy
-	cmd.Flags().StringVar(&grpcProxyListenCert, "cert-file", "", "identify secure connections to the proxy using this TLS certificate file")
-	cmd.Flags().StringVar(&grpcProxyListenKey, "key-file", "", "identify secure connections to the proxy using this TLS key file")
-	cmd.Flags().StringVar(&grpcProxyListenCA, "trusted-ca-file", "", "verify certificates of TLS-enabled secure proxy using this CA bundle")
-	cmd.Flags().BoolVar(&grpcProxyListenAutoTLS, "auto-tls", false, "proxy TLS using generated certificates")
-	cmd.Flags().StringVar(&grpcProxyListenCRL, "client-crl-file", "", "proxy client certificate revocation list file.")
+    // client TLS for connecting to proxy
+    cmd.Flags().StringVar(&grpcProxyListenCert, "cert-file", "", "identify secure connections to the proxy using this TLS certificate file")
+    cmd.Flags().StringVar(&grpcProxyListenKey, "key-file", "", "identify secure connections to the proxy using this TLS key file")
+    cmd.Flags().StringVar(&grpcProxyListenCA, "trusted-ca-file", "", "verify certificates of TLS-enabled secure proxy using this CA bundle")
+    cmd.Flags().BoolVar(&grpcProxyListenAutoTLS, "auto-tls", false, "proxy TLS using generated certificates")
+    cmd.Flags().StringVar(&grpcProxyListenCRL, "client-crl-file", "", "proxy client certificate revocation list file.")
 
-	// experimental flags
-	cmd.Flags().BoolVar(&grpcProxyEnableOrdering, "experimental-serializable-ordering", false, "Ensure serializable reads have monotonically increasing store revisions across endpoints.")
-	cmd.Flags().StringVar(&grpcProxyLeasing, "experimental-leasing-prefix", "", "leasing metadata prefix for disconnected linearized reads.")
+    // experimental flags
+    cmd.Flags().BoolVar(&grpcProxyEnableOrdering, "experimental-serializable-ordering", false, "Ensure serializable reads have monotonically increasing store revisions across endpoints.")
+    cmd.Flags().StringVar(&grpcProxyLeasing, "experimental-leasing-prefix", "", "leasing metadata prefix for disconnected linearized reads.")
 
-	cmd.Flags().BoolVar(&grpcProxyDebug, "debug", false, "Enable debug-level logging for grpc-proxy.")
+    cmd.Flags().BoolVar(&grpcProxyDebug, "debug", false, "Enable debug-level logging for grpc-proxy.")
 
-	return &cmd
+    return &cmd
 }
 
 func startGRPCProxy(cmd *cobra.Command, args []string) {
-	checkArgs()
+    checkArgs()
 
 	lcfg := zap.Config{
 		Level:       zap.NewAtomicLevelAt(zap.InfoLevel),

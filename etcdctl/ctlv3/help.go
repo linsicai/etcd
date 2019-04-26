@@ -17,40 +17,41 @@
 package ctlv3
 
 import (
-	"bytes"
-	"fmt"
-	"io"
-	"os"
-	"strings"
-	"text/tabwriter"
-	"text/template"
+    "bytes"
+    "fmt"
+    "io"
+    "os"
+    "strings"
+    "text/tabwriter"
+    "text/template"
 
-	"go.etcd.io/etcd/version"
+    "go.etcd.io/etcd/version"
 
-	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
+    "github.com/spf13/cobra"
+    "github.com/spf13/pflag"
 )
 
 var (
 	commandUsageTemplate *template.Template
-	templFuncs           = template.FuncMap{
-		"descToLines": func(s string) []string {
-			// trim leading/trailing whitespace and split into slice of lines
-			return strings.Split(strings.Trim(s, "\n\t "), "\n")
-		},
-		"cmdName": func(cmd *cobra.Command, startCmd *cobra.Command) string {
-			parts := []string{cmd.Name()}
-			for cmd.HasParent() && cmd.Parent().Name() != startCmd.Name() {
-				cmd = cmd.Parent()
-				parts = append([]string{cmd.Name()}, parts...)
-			}
-			return strings.Join(parts, " ")
-		},
-	}
+
+    templFuncs           = template.FuncMap{
+        "descToLines": func(s string) []string {
+            // trim leading/trailing whitespace and split into slice of lines
+            return strings.Split(strings.Trim(s, "\n\t "), "\n")
+        },
+        "cmdName": func(cmd *cobra.Command, startCmd *cobra.Command) string {
+            parts := []string{cmd.Name()}
+            for cmd.HasParent() && cmd.Parent().Name() != startCmd.Name() {
+                cmd = cmd.Parent()
+                parts = append([]string{cmd.Name()}, parts...)
+            }
+            return strings.Join(parts, " ")
+        },
+    }
 )
 
 func init() {
-	commandUsage := `
+    commandUsage := `
 {{ $cmd := .Cmd }}\
 {{ $cmdname := cmdName .Cmd .Cmd.Root }}\
 NAME:
@@ -101,75 +102,75 @@ GLOBAL OPTIONS:
 {{end}}
 `[1:]
 
-	commandUsageTemplate = template.Must(template.New("command_usage").Funcs(templFuncs).Parse(strings.Replace(commandUsage, "\\\n", "", -1)))
+    commandUsageTemplate = template.Must(template.New("command_usage").Funcs(templFuncs).Parse(strings.Replace(commandUsage, "\\\n", "", -1)))
 }
 
 func etcdFlagUsages(flagSet *pflag.FlagSet) string {
-	x := new(bytes.Buffer)
+    x := new(bytes.Buffer)
 
-	flagSet.VisitAll(func(flag *pflag.Flag) {
-		if len(flag.Deprecated) > 0 {
-			return
-		}
-		var format string
-		if len(flag.Shorthand) > 0 {
-			format = "  -%s, --%s"
-		} else {
-			format = "   %s   --%s"
-		}
-		if len(flag.NoOptDefVal) > 0 {
-			format = format + "["
-		}
-		if flag.Value.Type() == "string" {
-			// put quotes on the value
-			format = format + "=%q"
-		} else {
-			format = format + "=%s"
-		}
-		if len(flag.NoOptDefVal) > 0 {
-			format = format + "]"
-		}
-		format = format + "\t%s\n"
-		shorthand := flag.Shorthand
-		fmt.Fprintf(x, format, shorthand, flag.Name, flag.DefValue, flag.Usage)
-	})
+    flagSet.VisitAll(func(flag *pflag.Flag) {
+        if len(flag.Deprecated) > 0 {
+            return
+        }
+        var format string
+        if len(flag.Shorthand) > 0 {
+            format = "  -%s, --%s"
+        } else {
+            format = "   %s   --%s"
+        }
+        if len(flag.NoOptDefVal) > 0 {
+            format = format + "["
+        }
+        if flag.Value.Type() == "string" {
+            // put quotes on the value
+            format = format + "=%q"
+        } else {
+            format = format + "=%s"
+        }
+        if len(flag.NoOptDefVal) > 0 {
+            format = format + "]"
+        }
+        format = format + "\t%s\n"
+        shorthand := flag.Shorthand
+        fmt.Fprintf(x, format, shorthand, flag.Name, flag.DefValue, flag.Usage)
+    })
 
-	return x.String()
+    return x.String()
 }
 
 func getSubCommands(cmd *cobra.Command) []*cobra.Command {
-	var subCommands []*cobra.Command
-	for _, subCmd := range cmd.Commands() {
-		subCommands = append(subCommands, subCmd)
-		subCommands = append(subCommands, getSubCommands(subCmd)...)
-	}
-	return subCommands
+    var subCommands []*cobra.Command
+    for _, subCmd := range cmd.Commands() {
+        subCommands = append(subCommands, subCmd)
+        subCommands = append(subCommands, getSubCommands(subCmd)...)
+    }
+    return subCommands
 }
 
 func usageFunc(cmd *cobra.Command) error {
-	subCommands := getSubCommands(cmd)
-	tabOut := getTabOutWithWriter(os.Stdout)
-	commandUsageTemplate.Execute(tabOut, struct {
-		Cmd         *cobra.Command
-		LocalFlags  string
-		GlobalFlags string
-		SubCommands []*cobra.Command
-		Version     string
-		APIVersion  string
-	}{
-		cmd,
-		etcdFlagUsages(cmd.LocalFlags()),
-		etcdFlagUsages(cmd.InheritedFlags()),
-		subCommands,
-		version.Version,
-		version.APIVersion,
-	})
-	tabOut.Flush()
-	return nil
+    subCommands := getSubCommands(cmd)
+    tabOut := getTabOutWithWriter(os.Stdout)
+    commandUsageTemplate.Execute(tabOut, struct {
+        Cmd         *cobra.Command
+        LocalFlags  string
+        GlobalFlags string
+        SubCommands []*cobra.Command
+        Version     string
+        APIVersion  string
+    }{
+        cmd,
+        etcdFlagUsages(cmd.LocalFlags()),
+        etcdFlagUsages(cmd.InheritedFlags()),
+        subCommands,
+        version.Version,
+        version.APIVersion,
+    })
+    tabOut.Flush()
+    return nil
 }
 
 func getTabOutWithWriter(writer io.Writer) *tabwriter.Writer {
-	aTabOut := new(tabwriter.Writer)
-	aTabOut.Init(writer, 0, 8, 1, '\t', 0)
-	return aTabOut
+    aTabOut := new(tabwriter.Writer)
+    aTabOut.Init(writer, 0, 8, 1, '\t', 0)
+    return aTabOut
 }

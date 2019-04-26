@@ -16,31 +16,36 @@
 package main
 
 import (
-	"fmt"
-	"os"
+    "fmt"
+    "os"
 
-	"go.etcd.io/etcd/etcdctl/ctlv2"
-	"go.etcd.io/etcd/etcdctl/ctlv3"
+    "go.etcd.io/etcd/etcdctl/ctlv2"
+    "go.etcd.io/etcd/etcdctl/ctlv3"
 )
 
 const (
-	apiEnv = "ETCDCTL_API"
+    apiEnv = "ETCDCTL_API"
 )
 
 func main() {
-	apiv := os.Getenv(apiEnv)
-	// unset apiEnv to avoid side-effect for future env and flag parsing.
-	os.Unsetenv(apiEnv)
-	if len(apiv) == 0 || apiv == "3" {
-		ctlv3.Start()
-		return
-	}
+    // 取环境变量，然后再清空
+    // unset apiEnv to avoid side-effect for future env and flag parsing.
+    apiv := os.Getenv(apiEnv)
+    os.Unsetenv(apiEnv)
 
-	if apiv == "2" {
-		ctlv2.Start()
-		return
-	}
+    if len(apiv) == 0 || apiv == "3" {
+        // 默认为v3
+        ctlv3.Start()
+        return
+    }
 
-	fmt.Fprintln(os.Stderr, "unsupported API version", apiv)
-	os.Exit(1)
+    if apiv == "2" {
+        // 启动V2
+        ctlv2.Start()
+        return
+    }
+
+    // 版本不支持
+    fmt.Fprintln(os.Stderr, "unsupported API version", apiv)
+    os.Exit(1)
 }

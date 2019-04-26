@@ -29,46 +29,75 @@ import (
 var plog = capnslog.NewPackageLogger("go.etcd.io/etcd", "proxy/tcpproxy")
 
 type remote struct {
+    // 锁
 	mu       sync.Mutex
+
+    // 服务
 	srv      *net.SRV
+
+    // 地址
 	addr     string
+
+    // 是否失效
 	inactive bool
 }
 
+// 设置失效
 func (r *remote) inactivate() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
 	r.inactive = true
 }
 
 func (r *remote) tryReactivate() error {
+    // ping 地址
 	conn, err := net.Dial("tcp", r.addr)
 	if err != nil {
 		return err
 	}
 	conn.Close()
+
+    // 加锁
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
+    // 设置有效
 	r.inactive = false
 	return nil
 }
 
+// 看是否有效
 func (r *remote) isActive() bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
 	return !r.inactive
 }
 
 type TCPProxy struct {
+    // 日志
 	Logger          *zap.Logger
+
+    // 监听者
 	Listener        net.Listener
+
+    // 后端配置
 	Endpoints       []*net.SRV
+
+    // 监控间隔
 	MonitorInterval time.Duration
 
+    // 推出信号量
 	donec chan struct{}
 
+    // 锁
 	mu        sync.Mutex // guards the following fields
+
+    // 后台
 	remotes   []*remote
+
+    // 轮询用
 	pickCount int // for round robin
 }
 
@@ -237,6 +266,9 @@ func (tp *TCPProxy) runMonitor() {
 func (tp *TCPProxy) Stop() {
 	// graceful shutdown?
 	// shutdown current connections?
+	// 关闭监听者
 	tp.Listener.Close()
+
+    // 通知结束
 	close(tp.donec)
 }

@@ -50,15 +50,21 @@ func TestNewDirectorScheme(t *testing.T) {
 	}
 
 	for i, tt := range tests {
+	    // 定义代理 url
 		uf := func() []string {
 			return tt.urls
 		}
+
+		// 创建director
 		got := newDirector(uf, time.Minute, time.Minute)
 
+        // 取eps
 		var gep []string
 		for _, ep := range got.ep {
 			gep = append(gep, ep.URL.String())
 		}
+
+        // 排序后做比较
 		sort.Strings(tt.want)
 		sort.Strings(gep)
 		if !reflect.DeepEqual(tt.want, gep) {
@@ -81,6 +87,7 @@ func TestDirectorEndpointsFiltering(t *testing.T) {
 		},
 	}
 
+    // 过滤
 	got := d.endpoints()
 	want := []*endpoint{
 		{

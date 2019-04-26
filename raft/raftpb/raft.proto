@@ -9,6 +9,7 @@ option (gogoproto.unmarshaler_all) = true;
 option (gogoproto.goproto_getters_all) = false;
 option (gogoproto.goproto_enum_prefix_all) = false;
 
+// 实体类型
 enum EntryType {
 	EntryNormal     = 0;
 	EntryConfChange = 1;

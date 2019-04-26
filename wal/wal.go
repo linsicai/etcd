@@ -80,42 +80,65 @@ var (
 // A just opened WAL is in read mode, and ready for reading records.
 // The WAL will be ready for appending after reading out all the previous records.
 type WAL struct {
+    // 日志
     lg *zap.Logger
 
+    // 目录
     dir string // the living directory of the underlay files
 
     // dirFile is a fd for the wal directory for syncing on Rename
+    // 目录句柄
     dirFile *os.File
 
+    // 元信息
     metadata []byte           // metadata recorded at the head of each WAL
+
+    // 硬件信息？
     state    raftpb.HardState // hardstate recorded at the head of WAL
 
+    // 快照
     start     walpb.Snapshot // snapshot to start reading
+
+    // 解析器
     decoder   *decoder       // decoder to decode records
+
+    // 解析器关闭函数
     readClose func() error   // closer for decode reader
 
+    // 锁
     mu      sync.Mutex
+
+    // 索引
     enti    uint64   // index of the last entry saved to the wal
+
+    // 编码器
     encoder *encoder // encoder to encode records
 
+    // 文件锁
     locks []*fileutil.LockedFile // the locked files the WAL holds (the name is increasing)
+
+    // 文件产生管道
     fp    *filePipeline
 }
 
 // Create creates a WAL ready for appending records. The given metadata is
 // recorded at the head of each WAL file, and can be retrieved with ReadAll.
 func Create(lg *zap.Logger, dirpath string, metadata []byte) (*WAL, error) {
+    // 校验路径
     if Exist(dirpath) {
         return nil, os.ErrExist
     }
 
     // keep temporary wal directory so WAL initialization appears atomic
+    // 清除临时文件
     tmpdirpath := filepath.Clean(dirpath) + ".tmp"
     if fileutil.Exist(tmpdirpath) {
         if err := os.RemoveAll(tmpdirpath); err != nil {
             return nil, err
         }
     }
+
+    // 创建临时文件
     if err := fileutil.CreateDirAll(tmpdirpath); err != nil {
         if lg != nil {
             lg.Warn(
@@ -128,6 +151,7 @@ func Create(lg *zap.Logger, dirpath string, metadata []byte) (*WAL, error) {
         return nil, err
     }
 
+    // 创建0-0文件
     p := filepath.Join(tmpdirpath, walName(0, 0))
     f, err := fileutil.LockFile(p, os.O_WRONLY|os.O_CREATE, fileutil.PrivateFileMode)
     if err != nil {
@@ -140,6 +164,8 @@ func Create(lg *zap.Logger, dirpath string, metadata []byte) (*WAL, error) {
         }
         return nil, err
     }
+
+    // 定位到文件尾
     if _, err = f.Seek(0, io.SeekEnd); err != nil {
         if lg != nil {
             lg.Warn(
@@ -150,6 +176,8 @@ func Create(lg *zap.Logger, dirpath string, metadata []byte) (*WAL, error) {
         }
         return nil, err
     }
+
+    // alloc
     if err = fileutil.Preallocate(f.File, SegmentSizeBytes, true); err != nil {
         if lg != nil {
             lg.Warn(
@@ -162,6 +190,7 @@ func Create(lg *zap.Logger, dirpath string, metadata []byte) (*WAL, error) {
         return nil, err
     }
 
+    // 得到一个wal
     w := &WAL{
         lg:       lg,
         dir:      dirpath,
@@ -178,10 +207,13 @@ func Create(lg *zap.Logger, dirpath string, metadata []byte) (*WAL, error) {
     if err = w.encoder.encode(&walpb.Record{Type: metadataType, Data: metadata}); err != nil {
         return nil, err
     }
+
+    // 保存快照
     if err = w.SaveSnapshot(walpb.Snapshot{}); err != nil {
         return nil, err
     }
 
+    // tmp 转正
     if w, err = w.renameWAL(tmpdirpath); err != nil {
         if lg != nil {
             lg.Warn(
@@ -194,6 +226,7 @@ func Create(lg *zap.Logger, dirpath string, metadata []byte) (*WAL, error) {
         return nil, err
     }
 
+    // 打开文件
     // directory was renamed; sync parent dir to persist rename
     pdir, perr := fileutil.OpenDir(filepath.Dir(w.dir))
     if perr != nil {
@@ -207,6 +240,8 @@ func Create(lg *zap.Logger, dirpath string, metadata []byte) (*WAL, error) {
         }
         return nil, perr
     }
+
+    // 刷盘
     if perr = fileutil.Fsync(pdir); perr != nil {
         if lg != nil {
             lg.Warn(
@@ -218,6 +253,8 @@ func Create(lg *zap.Logger, dirpath string, metadata []byte) (*WAL, error) {
         }
         return nil, perr
     }
+
+    // 关闭
     if perr = pdir.Close(); err != nil {
         if lg != nil {
             lg.Warn(
@@ -230,13 +267,16 @@ func Create(lg *zap.Logger, dirpath string, metadata []byte) (*WAL, error) {
         return nil, perr
     }
 
+    // 成功
     return w, nil
 }
 
 func (w *WAL) renameWAL(tmpdirpath string) (*WAL, error) {
+    // 删除现有文件
     if err := os.RemoveAll(w.dir); err != nil {
         return nil, err
     }
+
     // On non-Windows platforms, hold the lock while renaming. Releasing
     // the lock and trying to reacquire it quickly can be flaky because
     // it's possible the process will fork to spawn a process while this is
@@ -249,6 +289,8 @@ func (w *WAL) renameWAL(tmpdirpath string) (*WAL, error) {
         }
         return nil, err
     }
+
+    // 创建文件
     w.fp = newFilePipeline(w.lg, w.dir, SegmentSizeBytes)
     df, err := fileutil.OpenDir(w.dir)
     w.dirFile = df
@@ -258,6 +300,7 @@ func (w *WAL) renameWAL(tmpdirpath string) (*WAL, error) {
 func (w *WAL) renameWALUnlock(tmpdirpath string) (*WAL, error) {
     // rename of directory with locked files doesn't work on windows/cifs;
     // close the WAL to release the locks so the directory can be renamed.
+    // 日志
     if w.lg != nil {
         w.lg.Info(
             "closing WAL to release flock and retry directory renaming",
@@ -269,19 +312,24 @@ func (w *WAL) renameWALUnlock(tmpdirpath string) (*WAL, error) {
     }
     w.Close()
 
+    // 改名
     if err := os.Rename(tmpdirpath, w.dir); err != nil {
         return nil, err
     }
 
     // reopen and relock
+    // 重新打开
     newWAL, oerr := Open(w.lg, w.dir, walpb.Snapshot{})
     if oerr != nil {
         return nil, oerr
     }
+
+    // 校验一下
     if _, _, _, err := newWAL.ReadAll(); err != nil {
         newWAL.Close()
         return nil, err
     }
+
     return newWAL, nil
 }
 
@@ -705,6 +753,7 @@ func (w *WAL) saveState(s *raftpb.HardState) error {
 }
 
 func (w *WAL) Save(st raftpb.HardState, ents []raftpb.Entry) error {
+    // 加锁
     w.mu.Lock()
     defer w.mu.Unlock()
 
@@ -740,19 +789,26 @@ func (w *WAL) Save(st raftpb.HardState, ents []raftpb.Entry) error {
 }
 
 func (w *WAL) SaveSnapshot(e walpb.Snapshot) error {
+    // 序列化
     b := pbutil.MustMarshal(&e)
 
+    // 加锁
     w.mu.Lock()
     defer w.mu.Unlock()
 
+    // 拼装记录
     rec := &walpb.Record{Type: snapshotType, Data: b}
     if err := w.encoder.encode(rec); err != nil {
         return err
     }
+
+    // 实体跟进
     // update enti only when snapshot is ahead of last index
     if w.enti < e.Index {
         w.enti = e.Index
     }
+
+    // 刷盘
     return w.sync()
 }
 

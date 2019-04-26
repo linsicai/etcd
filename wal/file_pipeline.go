@@ -128,7 +128,7 @@ func (fp *filePipeline) run() {
         }
 
         select {
-        case fp.filec <- f: // 创建成功
+        case fp.filec <- f: // 等待获取
         case <-fp.donec:
             // 协程结束
             os.Remove(f.Name())

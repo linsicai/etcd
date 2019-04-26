@@ -31,6 +31,7 @@ const (
 	// proxy needs to create one new connection when handling each request in
 	// the delta, which is bad because the creation consumes resource and
 	// may eat up ephemeral ports.
+	// 默认最大空闲连接数
 	DefaultMaxIdleConnsPerHost = 128
 )
 
@@ -38,12 +39,14 @@ const (
 // which client requests should be proxied. This function will be queried
 // periodically by the proxy Handler to refresh the set of available
 // backends.
+// 获取代理URL函数
 type GetProxyURLs func() []string
 
 // NewHandler creates a new HTTP handler, listening on the given transport,
 // which will proxy requests to an etcd cluster.
 // The handler will periodically update its view of the cluster.
 func NewHandler(t *http.Transport, urlsFunc GetProxyURLs, failureWait time.Duration, refreshInterval time.Duration) http.Handler {
+    // 加密
 	if t.TLSClientConfig != nil {
 		// Enable http2, see Issue 5033.
 		err := http2.ConfigureTransport(t)
@@ -52,11 +55,13 @@ func NewHandler(t *http.Transport, urlsFunc GetProxyURLs, failureWait time.Durat
 		}
 	}
 
+    // 配置proxy，路由与加密
 	p := &reverseProxy{
 		director:  newDirector(urlsFunc, failureWait, refreshInterval),
 		transport: t,
 	}
 
+    // http
 	mux := http.NewServeMux()
 	mux.Handle("/", p)
 	mux.HandleFunc("/v2/config/local/proxy", p.configHandler)
@@ -82,10 +87,12 @@ func readonlyHandlerFunc(next http.Handler) func(http.ResponseWriter, *http.Requ
 }
 
 func (p *reverseProxy) configHandler(w http.ResponseWriter, r *http.Request) {
+    // 方法校验
 	if !allowMethod(w, r.Method, "GET") {
 		return
 	}
 
+    // 可用eps
 	eps := p.director.endpoints()
 	epstr := make([]string, len(eps))
 	for i, e := range eps {
@@ -105,11 +112,15 @@ func (p *reverseProxy) configHandler(w http.ResponseWriter, r *http.Request) {
 // and if not, it writes an error to w.  A boolean is returned indicating
 // whether or not the method is allowed.
 func allowMethod(w http.ResponseWriter, m string, ms ...string) bool {
+    // 校验是否在allow 列表里面
 	for _, meth := range ms {
 		if m == meth {
+		    // 校验通过
 			return true
 		}
 	}
+
+    // 报错
 	w.Header().Set("Allow", strings.Join(ms, ","))
 	http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 	return false

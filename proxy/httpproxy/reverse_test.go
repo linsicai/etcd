@@ -94,6 +94,7 @@ func TestReverseProxyServe(t *testing.T) {
 	}
 }
 
+// 测试转发
 func TestRedirectRequest(t *testing.T) {
 	loc := url.URL{
 		Scheme: "http",
@@ -129,6 +130,7 @@ func TestRedirectRequest(t *testing.T) {
 	}
 }
 
+// 测试转发，去除端口
 func TestMaybeSetForwardedFor(t *testing.T) {
 	tests := []struct {
 		raddr  string
@@ -168,6 +170,7 @@ func TestMaybeSetForwardedFor(t *testing.T) {
 	}
 }
 
+// 测试header 被删除
 func TestRemoveSingleHopHeaders(t *testing.T) {
 	hdr := http.Header(map[string][]string{
 		// single-hop headers that should be removed
@@ -197,6 +200,7 @@ func TestRemoveSingleHopHeaders(t *testing.T) {
 	}
 }
 
+// 测试header copy
 func TestCopyHeader(t *testing.T) {
 	tests := []struct {
 		src  http.Header

@@ -16,7 +16,9 @@ package mvcc
 
 import "go.etcd.io/etcd/lease"
 
-type readView struct{ kv KV }
+type readView struct {
+    kv KV
+}
 
 func (rv *readView) FirstRev() int64 {
 	tr := rv.kv.Read()

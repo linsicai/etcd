@@ -24,6 +24,8 @@ import (
 
 func UpdateConsistentIndex(be backend.Backend, index uint64) {
 	tx := be.BatchTx()
+
+    // 加锁
 	tx.Lock()
 	defer tx.Unlock()
 
@@ -43,14 +45,17 @@ func UpdateConsistentIndex(be backend.Backend, index uint64) {
 }
 
 func WriteKV(be backend.Backend, kv mvccpb.KeyValue) {
+    // 拼修改版本号
 	ibytes := newRevBytes()
 	revToBytes(revision{main: kv.ModRevision}, ibytes)
 
+    // 序列化
 	d, err := kv.Marshal()
 	if err != nil {
 		panic(fmt.Errorf("cannot marshal event: %v", err))
 	}
 
+    // 加锁写
 	be.BatchTx().Lock()
 	be.BatchTx().UnsafePut(keyBucketName, ibytes, d)
 	be.BatchTx().Unlock()

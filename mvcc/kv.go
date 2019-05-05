@@ -20,25 +20,36 @@ import (
 	"go.etcd.io/etcd/mvcc/mvccpb"
 )
 
+// 范围选项
 type RangeOptions struct {
+    // 
 	Limit int64
+
+    // 版本？
 	Rev   int64
+
 	Count bool
 }
 
+// 范围结果
 type RangeResult struct {
 	KVs   []mvccpb.KeyValue
+
 	Rev   int64
+
 	Count int
 }
 
+// 读视图
 type ReadView interface {
 	// FirstRev returns the first KV revision at the time of opening the txn.
 	// After a compaction, the first revision increases to the compaction
 	// revision.
+	// 第一个版本
 	FirstRev() int64
 
 	// Rev returns the revision of the KV at the time of opening the txn.
+	// 当前版本
 	Rev() int64
 
 	// Range gets the keys in the range at rangeRev.
@@ -49,17 +60,21 @@ type ReadView interface {
 	// If `end` is not nil and empty, it gets the keys greater than or equal to key.
 	// Limit limits the number of keys returned.
 	// If the required rev is compacted, ErrCompacted will be returned.
+	// 范围读取
 	Range(key, end []byte, ro RangeOptions) (r *RangeResult, err error)
 }
 
 // TxnRead represents a read-only transaction with operations that will not
 // block other read transactions.
+// 事务读
 type TxnRead interface {
 	ReadView
+
 	// End marks the transaction is complete and ready to commit.
 	End()
 }
 
+// 些视图
 type WriteView interface {
 	// DeleteRange deletes the given range from the store.
 	// A deleteRange increases the rev of the store if any key in the range exists.
@@ -68,6 +83,7 @@ type WriteView interface {
 	// It also generates one event for each key delete in the event history.
 	// if the `end` is nil, deleteRange deletes the key.
 	// if the `end` is not nil, deleteRange deletes the keys in range [key, range_end).
+	// 删除
 	DeleteRange(key, end []byte) (n, rev int64)
 
 	// Put puts the given key, value into the store. Put also takes additional argument lease to
@@ -78,36 +94,54 @@ type WriteView interface {
 	Put(key, value []byte, lease lease.LeaseID) (rev int64)
 }
 
+// 写事务
 // TxnWrite represents a transaction that can modify the store.
 type TxnWrite interface {
 	TxnRead
 	WriteView
+
 	// Changes gets the changes made since opening the write txn.
+	// 变更列表
 	Changes() []mvccpb.KeyValue
 }
 
 // txnReadWrite coerces a read txn to a write, panicking on any write operation.
-type txnReadWrite struct{ TxnRead }
+type txnReadWrite struct {
+    TxnRead
+}
 
-func (trw *txnReadWrite) DeleteRange(key, end []byte) (n, rev int64) { panic("unexpected DeleteRange") }
+func (trw *txnReadWrite) DeleteRange(key, end []byte) (n, rev int64) {
+    // 抛异常
+    panic("unexpected DeleteRange")
+}
 func (trw *txnReadWrite) Put(key, value []byte, lease lease.LeaseID) (rev int64) {
 	panic("unexpected Put")
 }
-func (trw *txnReadWrite) Changes() []mvccpb.KeyValue { return nil }
+func (trw *txnReadWrite) Changes() []mvccpb.KeyValue {
+    return nil
+}
 
-func NewReadOnlyTxnWrite(txn TxnRead) TxnWrite { return &txnReadWrite{txn} }
+// 只读写事务
+func NewReadOnlyTxnWrite(txn TxnRead) TxnWrite {
+    return &txnReadWrite{txn}
+}
 
+// kv 接口
 type KV interface {
+    // 读写视图
 	ReadView
 	WriteView
 
 	// Read creates a read transaction.
+	// 读事务
 	Read() TxnRead
 
 	// Write creates a write transaction.
+	// 写事务
 	Write() TxnWrite
 
 	// Hash computes the hash of the KV's backend.
+	// 计算hash
 	Hash() (hash uint32, revision int64, err error)
 
 	// HashByRev computes the hash of all MVCC revisions up to a given revision.
@@ -117,6 +151,7 @@ type KV interface {
 	Compact(rev int64) (<-chan struct{}, error)
 
 	// Commit commits outstanding txns into the underlying backend.
+	// 提交
 	Commit()
 
 	// Restore restores the KV store from a backend.
@@ -125,8 +160,10 @@ type KV interface {
 }
 
 // WatchableKV is a KV that can be watched.
+// watch kv 接口
 type WatchableKV interface {
 	KV
+
 	Watchable
 }
 
@@ -144,6 +181,7 @@ type Watchable interface {
 // this entry are skipped and return empty response.
 type ConsistentWatchableKV interface {
 	WatchableKV
+
 	// ConsistentIndex returns the current consistent index of the KV.
 	ConsistentIndex() uint64
 }

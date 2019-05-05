@@ -19,8 +19,10 @@ package lease
 // For the lessor's lease checkpoint heap, the time identifies the next lease checkpoint time.
 type LeaseWithTime struct {
 	id LeaseID
+
 	// Unix nanos timestamp.
 	time  int64
+
 	index int
 }
 

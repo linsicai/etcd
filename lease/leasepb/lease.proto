@@ -11,8 +11,13 @@ option (gogoproto.goproto_getters_all) = false;
 option (gogoproto.goproto_enum_prefix_all) = false;
 
 message Lease {
+  // id
   int64 ID = 1;
+
+  // ttl
   int64 TTL = 2;
+
+  // 剩余ttl
   int64 RemainingTTL = 3;
 }
 

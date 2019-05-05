@@ -17,6 +17,7 @@ package backend
 import "github.com/prometheus/client_golang/prometheus"
 
 var (
+    // 提交
 	commitSec = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Namespace: "etcd",
 		Subsystem: "disk",
@@ -28,6 +29,7 @@ var (
 		Buckets: prometheus.ExponentialBuckets(0.001, 2, 14),
 	})
 
+    // 平衡
 	rebalanceSec = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Namespace: "etcd_debugging",
 		Subsystem: "disk",
@@ -50,6 +52,7 @@ var (
 		Buckets: prometheus.ExponentialBuckets(0.001, 2, 14),
 	})
 
+    // 写操作
 	writeSec = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Namespace: "etcd_debugging",
 		Subsystem: "disk",
@@ -61,6 +64,7 @@ var (
 		Buckets: prometheus.ExponentialBuckets(0.001, 2, 14),
 	})
 
+    // 碎片整理
 	defragSec = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Namespace: "etcd",
 		Subsystem: "disk",
@@ -73,6 +77,7 @@ var (
 		Buckets: prometheus.ExponentialBuckets(.1, 2, 13),
 	})
 
+    // 快照转移
 	snapshotTransferSec = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Namespace: "etcd",
 		Subsystem: "disk",

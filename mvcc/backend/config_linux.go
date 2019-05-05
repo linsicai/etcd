@@ -31,4 +31,6 @@ var boltOpenOptions = &bolt.Options{
 	NoFreelistSync: true,
 }
 
-func (bcfg *BackendConfig) mmapSize() int { return int(bcfg.MmapSize) }
+func (bcfg *BackendConfig) mmapSize() int {
+    return int(bcfg.MmapSize)
+}

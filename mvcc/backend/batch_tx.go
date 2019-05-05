@@ -26,28 +26,38 @@ import (
 )
 
 type BatchTx interface {
+    // 读接口
 	ReadTx
+
 	UnsafeCreateBucket(name []byte)
 	UnsafePut(bucketName []byte, key []byte, value []byte)
 	UnsafeSeqPut(bucketName []byte, key []byte, value []byte)
 	UnsafeDelete(bucketName []byte, key []byte)
+
 	// Commit commits a previous tx and begins a new writable one.
 	Commit()
+
 	// CommitAndStop commits the previous tx and does not create a new one.
 	CommitAndStop()
 }
 
 type batchTx struct {
+    // 锁
 	sync.Mutex
+
 	tx      *bolt.Tx
+
+    // 后台线程
 	backend *backend
 
+    // bucket 数
 	pending int
 }
 
 func (t *batchTx) UnsafeCreateBucket(name []byte) {
 	_, err := t.tx.CreateBucket(name)
 	if err != nil && err != bolt.ErrBucketExists {
+	    // 错误
 		if t.backend.lg != nil {
 			t.backend.lg.Fatal(
 				"failed to create a bucket",
@@ -58,6 +68,8 @@ func (t *batchTx) UnsafeCreateBucket(name []byte) {
 			plog.Fatalf("cannot create bucket %s (%v)", name, err)
 		}
 	}
+
+    // ++
 	t.pending++
 }
 
@@ -72,8 +84,10 @@ func (t *batchTx) UnsafeSeqPut(bucketName []byte, key []byte, value []byte) {
 }
 
 func (t *batchTx) unsafePut(bucketName []byte, key []byte, value []byte, seq bool) {
+	// 找桶
 	bucket := t.tx.Bucket(bucketName)
 	if bucket == nil {
+	    // 无桶报错
 		if t.backend.lg != nil {
 			t.backend.lg.Fatal(
 				"failed to find a bucket",
@@ -83,12 +97,17 @@ func (t *batchTx) unsafePut(bucketName []byte, key []byte, value []byte, seq boo
 			plog.Fatalf("bucket %s does not exist", bucketName)
 		}
 	}
+
+    // 神奇功效？？？？
 	if seq {
 		// it is useful to increase fill percent when the workloads are mostly append-only.
 		// this can delay the page split and reduce space usage.
 		bucket.FillPercent = 0.9
 	}
+
+    // 写kv
 	if err := bucket.Put(key, value); err != nil {
+	    // 写kv 失败
 		if t.backend.lg != nil {
 			t.backend.lg.Fatal(
 				"failed to write to a bucket",
@@ -99,11 +118,14 @@ func (t *batchTx) unsafePut(bucketName []byte, key []byte, value []byte, seq boo
 			plog.Fatalf("cannot put key into bucket (%v)", err)
 		}
 	}
+
+    // 写成功
 	t.pending++
 }
 
 // UnsafeRange must be called holding the lock on the tx.
 func (t *batchTx) UnsafeRange(bucketName, key, endKey []byte, limit int64) ([][]byte, [][]byte) {
+    // 找桶
 	bucket := t.tx.Bucket(bucketName)
 	if bucket == nil {
 		if t.backend.lg != nil {
@@ -115,33 +137,45 @@ func (t *batchTx) UnsafeRange(bucketName, key, endKey []byte, limit int64) ([][]
 			plog.Fatalf("bucket %s does not exist", bucketName)
 		}
 	}
+
+    // 查询
 	return unsafeRange(bucket.Cursor(), key, endKey, limit)
 }
 
 func unsafeRange(c *bolt.Cursor, key, endKey []byte, limit int64) (keys [][]byte, vs [][]byte) {
+	// 默认查询全部
 	if limit <= 0 {
 		limit = math.MaxInt64
 	}
+
 	var isMatch func(b []byte) bool
 	if len(endKey) > 0 {
+	    // 比endKey 小
 		isMatch = func(b []byte) bool { return bytes.Compare(b, endKey) < 0 }
 	} else {
+	    // 只查询一个
 		isMatch = func(b []byte) bool { return bytes.Equal(b, key) }
 		limit = 1
 	}
 
+    // 一直往前走
 	for ck, cv := c.Seek(key); ck != nil && isMatch(ck); ck, cv = c.Next() {
+		// 取kv
 		vs = append(vs, cv)
 		keys = append(keys, ck)
+
+        // 直至终点
 		if limit == int64(len(keys)) {
 			break
 		}
 	}
+
 	return keys, vs
 }
 
 // UnsafeDelete must be called holding the lock on the tx.
 func (t *batchTx) UnsafeDelete(bucketName []byte, key []byte) {
+	// 找桶
 	bucket := t.tx.Bucket(bucketName)
 	if bucket == nil {
 		if t.backend.lg != nil {
@@ -153,6 +187,8 @@ func (t *batchTx) UnsafeDelete(bucketName []byte, key []byte) {
 			plog.Fatalf("bucket %s does not exist", bucketName)
 		}
 	}
+
+    // 删除
 	err := bucket.Delete(key)
 	if err != nil {
 		if t.backend.lg != nil {
@@ -165,6 +201,8 @@ func (t *batchTx) UnsafeDelete(bucketName []byte, key []byte) {
 			plog.Fatalf("cannot delete key from bucket (%v)", err)
 		}
 	}
+
+    // 完成
 	t.pending++
 }
 
@@ -177,6 +215,7 @@ func unsafeForEach(tx *bolt.Tx, bucket []byte, visitor func(k, v []byte) error) 
 	if b := tx.Bucket(bucket); b != nil {
 		return b.ForEach(visitor)
 	}
+
 	return nil
 }
 
@@ -195,15 +234,18 @@ func (t *batchTx) CommitAndStop() {
 }
 
 func (t *batchTx) Unlock() {
+    // 自动开始下一个
 	if t.pending >= t.backend.batchLimit {
 		t.commit(false)
 	}
+
 	t.Mutex.Unlock()
 }
 
 func (t *batchTx) safePending() int {
 	t.Mutex.Lock()
 	defer t.Mutex.Unlock()
+
 	return t.pending
 }
 
@@ -211,21 +253,26 @@ func (t *batchTx) commit(stop bool) {
 	// commit the last tx
 	if t.tx != nil {
 		if t.pending == 0 && !stop {
+		    // 无数据 且 未停止
 			return
 		}
 
+        // 计时
 		start := time.Now()
 
+        // 提交
 		// gofail: var beforeCommit struct{}
 		err := t.tx.Commit()
 		// gofail: var afterCommit struct{}
 
+        // 打点
 		rebalanceSec.Observe(t.tx.Stats().RebalanceTime.Seconds())
 		spillSec.Observe(t.tx.Stats().SpillTime.Seconds())
 		writeSec.Observe(t.tx.Stats().WriteTime.Seconds())
 		commitSec.Observe(time.Since(start).Seconds())
 		atomic.AddInt64(&t.backend.commits, 1)
 
+        // 提交完成或错误
 		t.pending = 0
 		if err != nil {
 			if t.backend.lg != nil {
@@ -235,6 +282,8 @@ func (t *batchTx) commit(stop bool) {
 			}
 		}
 	}
+
+    // 通知后台线程干活
 	if !stop {
 		t.tx = t.backend.begin(true)
 	}
@@ -242,6 +291,7 @@ func (t *batchTx) commit(stop bool) {
 
 type batchTxBuffered struct {
 	batchTx
+
 	buf txWriteBuffer
 }
 
@@ -253,19 +303,25 @@ func newBatchTxBuffered(backend *backend) *batchTxBuffered {
 			seq:      true,
 		},
 	}
+
+    // 自动干活
 	tx.Commit()
+
 	return tx
 }
 
 func (t *batchTxBuffered) Unlock() {
 	if t.pending != 0 {
+	    // 写回到read 里面
 		t.backend.readTx.mu.Lock()
 		t.buf.writeback(&t.backend.readTx.buf)
 		t.backend.readTx.mu.Unlock()
+
 		if t.pending >= t.backend.batchLimit {
 			t.commit(false)
 		}
 	}
+
 	t.batchTx.Unlock()
 }
 
@@ -297,6 +353,7 @@ func (t *batchTxBuffered) unsafeCommit(stop bool) {
 				plog.Fatalf("cannot rollback tx (%s)", err)
 			}
 		}
+	
 		t.backend.readTx.reset()
 	}
 
@@ -309,10 +366,12 @@ func (t *batchTxBuffered) unsafeCommit(stop bool) {
 
 func (t *batchTxBuffered) UnsafePut(bucketName []byte, key []byte, value []byte) {
 	t.batchTx.UnsafePut(bucketName, key, value)
+
 	t.buf.put(bucketName, key, value)
 }
 
 func (t *batchTxBuffered) UnsafeSeqPut(bucketName []byte, key []byte, value []byte) {
 	t.batchTx.UnsafeSeqPut(bucketName, key, value)
+
 	t.buf.putSeq(bucketName, key, value)
 }

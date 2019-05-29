@@ -18,40 +18,49 @@ package lease
 // For the lessor's lease heap, time identifies the lease expiration time.
 // For the lessor's lease checkpoint heap, the time identifies the next lease checkpoint time.
 type LeaseWithTime struct {
+    // id
 	id LeaseID
 
 	// Unix nanos timestamp.
+	// 时间
 	time  int64
 
+    // 序号
 	index int
 }
 
 type LeaseQueue []*LeaseWithTime
 
-func (pq LeaseQueue) Len() int { return len(pq) }
-
+func (pq LeaseQueue) Len() int {
+    return len(pq)
+}
 func (pq LeaseQueue) Less(i, j int) bool {
 	return pq[i].time < pq[j].time
 }
-
 func (pq LeaseQueue) Swap(i, j int) {
 	pq[i], pq[j] = pq[j], pq[i]
 	pq[i].index = i
 	pq[j].index = j
 }
 
+// 插入
 func (pq *LeaseQueue) Push(x interface{}) {
 	n := len(*pq)
+
 	item := x.(*LeaseWithTime)
 	item.index = n
+
 	*pq = append(*pq, item)
 }
 
+// 取时间最小的
 func (pq *LeaseQueue) Pop() interface{} {
 	old := *pq
+
 	n := len(old)
 	item := old[n-1]
 	item.index = -1 // for safety
 	*pq = old[0 : n-1]
+
 	return item
 }

@@ -807,20 +807,32 @@ message LeaseKeepAliveResponse {
 
 message LeaseTimeToLiveRequest {
   // ID is the lease ID for the lease.
+  // 租约ID
   int64 ID = 1;
+
   // keys is true to query all the keys attached to this lease.
+  // 获取所有keys
   bool keys = 2;
 }
 
 message LeaseTimeToLiveResponse {
+  // 通用头部
   ResponseHeader header = 1;
+
   // ID is the lease ID from the keep alive request.
+  // 租约id
   int64 ID = 2;
+
   // TTL is the remaining TTL in seconds for the lease; the lease will expire in under TTL+1 seconds.
+  // 剩余跳数
   int64 TTL = 3;
+
   // GrantedTTL is the initial granted time in seconds upon lease creation/renewal.
+  // 初始化跳数
   int64 grantedTTL = 4;
+
   // Keys is the list of keys attached to this lease.
+  // 所有keys
   repeated bytes keys = 5;
 }
 

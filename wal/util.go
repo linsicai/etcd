@@ -109,6 +109,7 @@ func readWALNames(lg *zap.Logger, dirpath string) ([]string, error) {
     return wnames, nil
 }
 
+// 获取有效名字列表
 func checkWalNames(lg *zap.Logger, names []string) []string {
     wnames := make([]string, 0)
     for _, name := range names {

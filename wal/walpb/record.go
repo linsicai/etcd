@@ -24,6 +24,7 @@ var (
 // 校验记录的crc，如果不正确，reset记录
 func (rec *Record) Validate(crc uint32) error {
 	if rec.Crc == crc {
+	    // 正确
 		return nil
 	}
 

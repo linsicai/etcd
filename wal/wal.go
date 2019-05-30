@@ -65,6 +65,7 @@ var (
 
     plog = capnslog.NewPackageLogger("go.etcd.io/etcd", "wal")
 
+    // 错误
     ErrMetadataConflict = errors.New("wal: conflicting metadata found")
     ErrFileNotFound     = errors.New("wal: file not found")
     ErrCRCMismatch      = errors.New("wal: crc mismatch")
@@ -283,10 +284,13 @@ func (w *WAL) renameWAL(tmpdirpath string) (*WAL, error) {
     // happening. The fds are set up as close-on-exec by the Go runtime,
     // but there is a window between the fork and the exec where another
     // process holds the lock.
+    // 改名
     if err := os.Rename(tmpdirpath, w.dir); err != nil {
         if _, ok := err.(*os.LinkError); ok {
+            // 另一种方法
             return w.renameWALUnlock(tmpdirpath)
         }
+
         return nil, err
     }
 
@@ -340,13 +344,17 @@ func (w *WAL) renameWALUnlock(tmpdirpath string) (*WAL, error) {
 // the given snap. The WAL cannot be appended to before reading out all of its
 // previous records.
 func Open(lg *zap.Logger, dirpath string, snap walpb.Snapshot) (*WAL, error) {
+    // 
     w, err := openAtIndex(lg, dirpath, snap, true)
     if err != nil {
         return nil, err
     }
+
+    // 打开文件
     if w.dirFile, err = fileutil.OpenDir(w.dir); err != nil {
         return nil, err
     }
+
     return w, nil
 }
 
@@ -357,11 +365,14 @@ func OpenForRead(lg *zap.Logger, dirpath string, snap walpb.Snapshot) (*WAL, err
 }
 
 func openAtIndex(lg *zap.Logger, dirpath string, snap walpb.Snapshot, write bool) (*WAL, error) {
+    // 解析目录文件
     names, err := readWALNames(lg, dirpath)
     if err != nil {
+        // 失败了
         return nil, err
     }
 
+    // 查找序号文件
     nameIndex, ok := searchIndex(lg, names, snap.Index)
     if !ok || !isValidSeq(lg, names[nameIndex:]) {
         return nil, ErrFileNotFound
@@ -437,9 +448,11 @@ func (w *WAL) ReadAll() (metadata []byte, state raftpb.HardState, ents []raftpb.
     decoder := w.decoder
 
     var match bool
+    // 遍历解码
     for err = decoder.decode(rec); err == nil; err = decoder.decode(rec) {
         switch rec.Type {
         case entryType:
+            // 实体
             e := mustUnmarshalEntry(rec.Data)
             if e.Index > w.start.Index {
                 ents = append(ents[:e.Index-w.start.Index-1], e)
@@ -447,9 +460,11 @@ func (w *WAL) ReadAll() (metadata []byte, state raftpb.HardState, ents []raftpb.
             w.enti = e.Index
 
         case stateType:
+            // 状态
             state = mustUnmarshalState(rec.Data)
 
         case metadataType:
+            // 元信息
             if metadata != nil && !bytes.Equal(metadata, rec.Data) {
                 state.Reset()
                 return nil, state, nil, ErrMetadataConflict
@@ -457,6 +472,7 @@ func (w *WAL) ReadAll() (metadata []byte, state raftpb.HardState, ents []raftpb.
             metadata = rec.Data
 
         case crcType:
+            // crc
             crc := decoder.crc.Sum32()
             // current crc of decoder must match the crc of the record.
             // do no need to match 0 crc, since the decoder is a new one at this case.
@@ -467,6 +483,7 @@ func (w *WAL) ReadAll() (metadata []byte, state raftpb.HardState, ents []raftpb.
             decoder.updateCRC(rec.Crc)
 
         case snapshotType:
+            // 快照
             var snap walpb.Snapshot
             pbutil.MustUnmarshal(&snap, rec.Data)
             if snap.Index == w.start.Index {
@@ -489,12 +506,14 @@ func (w *WAL) ReadAll() (metadata []byte, state raftpb.HardState, ents []raftpb.
         // The last record maybe a partial written one, so
         // ErrunexpectedEOF might be returned.
         if err != io.EOF && err != io.ErrUnexpectedEOF {
+            // 出错了
             state.Reset()
             return nil, state, nil, err
         }
     default:
         // We must read all of the entries if WAL is opened in write mode.
         if err != io.EOF {
+            // 没有读完
             state.Reset()
             return nil, state, nil, err
         }
@@ -514,19 +533,24 @@ func (w *WAL) ReadAll() (metadata []byte, state raftpb.HardState, ents []raftpb.
 
     err = nil
     if !match {
+        // 找不到
         err = ErrSnapshotNotFound
     }
 
     // close decoder, disable reading
+    // 关闭读
     if w.readClose != nil {
         w.readClose()
         w.readClose = nil
     }
+    // 空快照
     w.start = walpb.Snapshot{}
 
+    // 元信息
     w.metadata = metadata
 
     if w.tail() != nil {
+        // 更新
         // create encoder (chain crc with the decoder), enable appending
         w.encoder, err = newFileEncoder(w.tail().File, w.decoder.lastCRC())
         if err != nil {
@@ -543,57 +567,71 @@ func (w *WAL) ReadAll() (metadata []byte, state raftpb.HardState, ents []raftpb.
 // Then cut atomically rename temp wal file to a wal file.
 func (w *WAL) cut() error {
     // close old wal file; truncate to avoid wasting space if an early cut
+    // 当前位置
     off, serr := w.tail().Seek(0, io.SeekCurrent)
     if serr != nil {
         return serr
     }
 
+    // 避免空白
     if err := w.tail().Truncate(off); err != nil {
         return err
     }
 
+    // 同步
     if err := w.sync(); err != nil {
         return err
     }
 
+    // 新文件
     fpath := filepath.Join(w.dir, walName(w.seq()+1, w.enti+1))
 
     // create a temp wal file with name sequence + 1, or truncate the existing one
+    // 打开
     newTail, err := w.fp.Open()
     if err != nil {
         return err
     }
 
     // update writer and save the previous crc
+    // 新锁
     w.locks = append(w.locks, newTail)
+
+    // 更新编码器
     prevCrc := w.encoder.crc.Sum32()
     w.encoder, err = newFileEncoder(w.tail().File, prevCrc)
     if err != nil {
         return err
     }
 
+    // 写crc
     if err = w.saveCrc(prevCrc); err != nil {
         return err
     }
 
+    // 写元信息
     if err = w.encoder.encode(&walpb.Record{Type: metadataType, Data: w.metadata}); err != nil {
         return err
     }
 
+    // 写状态
     if err = w.saveState(&w.state); err != nil {
         return err
     }
 
     // atomically move temp wal file to wal file
+    // 同步
     if err = w.sync(); err != nil {
         return err
     }
 
+    // 计算位置
     off, err = w.tail().Seek(0, io.SeekCurrent)
     if err != nil {
         return err
     }
 
+    // 改名同步
     if err = os.Rename(newTail.Name(), fpath); err != nil {
         return err
     }
@@ -602,23 +640,26 @@ func (w *WAL) cut() error {
     }
 
     // reopen newTail with its new path so calls to Name() match the wal filename format
+    // 关闭锁
     newTail.Close()
 
+    // 重新打开，定位，更新锁
     if newTail, err = fileutil.LockFile(fpath, os.O_WRONLY, fileutil.PrivateFileMode); err != nil {
         return err
     }
     if _, err = newTail.Seek(off, io.SeekStart); err != nil {
         return err
     }
-
     w.locks[len(w.locks)-1] = newTail
 
+    // 更新编码器
     prevCrc = w.encoder.crc.Sum32()
     w.encoder, err = newFileEncoder(w.tail().File, prevCrc)
     if err != nil {
         return err
     }
 
+    // 写日志
     if w.lg != nil {
         w.lg.Info("created a new WAL segment", zap.String("path", fpath))
     } else {
@@ -628,15 +669,19 @@ func (w *WAL) cut() error {
 }
 
 func (w *WAL) sync() error {
+    // 编码器刷盘
     if w.encoder != nil {
         if err := w.encoder.flush(); err != nil {
             return err
         }
     }
-    start := time.Now()
-    err := fileutil.Fdatasync(w.tail().File)
 
+    start := time.Now()
+    // 同步
+    err := fileutil.Fdatasync(w.tail().File)
     took := time.Since(start)
+
+    // 监控耗时
     if took > warnSyncDuration {
         if w.lg != nil {
             w.lg.Warn(
@@ -662,16 +707,20 @@ func (w *WAL) ReleaseLockTo(index uint64) error {
     defer w.mu.Unlock()
 
     if len(w.locks) == 0 {
+        // 无锁
         return nil
     }
 
     var smaller int
     found := false
+    // 找第一个比index 大的
     for i, l := range w.locks {
         _, lockIndex, err := parseWALName(filepath.Base(l.Name()))
         if err != nil {
+            // 错误
             return err
         }
+
         if lockIndex >= index {
             smaller = i - 1
             found = true
@@ -682,13 +731,16 @@ func (w *WAL) ReleaseLockTo(index uint64) error {
     // if no lock index is greater than the release index, we can
     // release lock up to the last one(excluding).
     if !found {
+        // 没找到比index 大的，就是全部了
         smaller = len(w.locks) - 1
     }
 
     if smaller <= 0 {
+        // 保留
         return nil
     }
 
+    // 释放锁
     for i := 0; i < smaller; i++ {
         if w.locks[i] == nil {
             continue
@@ -705,20 +757,25 @@ func (w *WAL) Close() error {
     w.mu.Lock()
     defer w.mu.Unlock()
 
+    // 关闭文件
     if w.fp != nil {
         w.fp.Close()
         w.fp = nil
     }
 
+    // 需要同步
     if w.tail() != nil {
         if err := w.sync(); err != nil {
             return err
         }
     }
+
+    // 关闭锁
     for _, l := range w.locks {
         if l == nil {
             continue
         }
+
         if err := l.Close(); err != nil {
             if w.lg != nil {
                 w.lg.Warn("failed to close WAL", zap.Error(err))
@@ -728,16 +785,23 @@ func (w *WAL) Close() error {
         }
     }
 
+    // 关闭目录
     return w.dirFile.Close()
 }
 
 func (w *WAL) saveEntry(e *raftpb.Entry) error {
     // TODO: add MustMarshalTo to reduce one allocation.
+    // 序列化
     b := pbutil.MustMarshal(e)
+
+    // 构造记录
     rec := &walpb.Record{Type: entryType, Data: b}
+
+    // 编码
     if err := w.encoder.encode(rec); err != nil {
         return err
     }
+
     w.enti = e.Index
     return nil
 }
@@ -746,9 +810,16 @@ func (w *WAL) saveState(s *raftpb.HardState) error {
     if raft.IsEmptyHardState(*s) {
         return nil
     }
+
     w.state = *s
+
+    // 序列化
     b := pbutil.MustMarshal(s)
+
+    // 构造记录
     rec := &walpb.Record{Type: stateType, Data: b}
+    
+    // 编码
     return w.encoder.encode(rec)
 }
 
@@ -759,25 +830,34 @@ func (w *WAL) Save(st raftpb.HardState, ents []raftpb.Entry) error {
 
     // short cut, do not call sync
     if raft.IsEmptyHardState(st) && len(ents) == 0 {
+        // 不需要保存
         return nil
     }
 
+    // 是否需要同步
     mustSync := raft.MustSync(st, w.state, len(ents))
 
     // TODO(xiangli): no more reference operator
+    // 遍历保存
     for i := range ents {
         if err := w.saveEntry(&ents[i]); err != nil {
             return err
         }
     }
+
+    // 保存状态
     if err := w.saveState(&st); err != nil {
         return err
     }
 
+    // 文件大小
     curOff, err := w.tail().Seek(0, io.SeekCurrent)
     if err != nil {
+        // 出错
         return err
     }
+
+    // 需要同步
     if curOff < SegmentSizeBytes {
         if mustSync {
             return w.sync()
@@ -785,6 +865,7 @@ func (w *WAL) Save(st raftpb.HardState, ents []raftpb.Entry) error {
         return nil
     }
 
+    // ？？？
     return w.cut()
 }
 
@@ -812,10 +893,12 @@ func (w *WAL) SaveSnapshot(e walpb.Snapshot) error {
     return w.sync()
 }
 
+// 保存crc
 func (w *WAL) saveCrc(prevCrc uint32) error {
     return w.encoder.encode(&walpb.Record{Type: crcType, Crc: prevCrc})
 }
 
+// 最后的锁
 func (w *WAL) tail() *fileutil.LockedFile {
     if len(w.locks) > 0 {
         return w.locks[len(w.locks)-1]

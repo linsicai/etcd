@@ -146,7 +146,9 @@ func decodeFrameSize(lenField int64) (recBytes int64, padBytes int64) {
 
 // isTornEntry determines whether the last entry of the WAL was partially written
 // and corrupted because of a torn write.
-// 磁头只部分写入了对应的扇区就返回成功信号，此时视磁盘已经覆盖的数据量的多少，如果太多，那么有限的ECC检验位也不能纠错如此多的不一致数据。
+// 磁头只部分写入了对应的扇区就返回成功信号
+// 此时视磁盘已经覆盖的数据量的多少
+// 如果太多，那么有限的ECC检验位也不能纠错如此多的不一致数据。
 func (d *decoder) isTornEntry(data []byte) bool {
     if len(d.brs) != 1 {
         // 还有数据的
@@ -158,6 +160,7 @@ func (d *decoder) isTornEntry(data []byte) bool {
     chunks := [][]byte{}
 
     // split data on sector boundaries
+    // 把数据分成多个chunk
     for curOff < len(data) {
         // 计算chunk 大小
         chunkLen := int(minSectorSize - (fileOff % minSectorSize))
@@ -174,6 +177,7 @@ func (d *decoder) isTornEntry(data []byte) bool {
     }
 
     // if any data for a sector chunk is all 0, it's a torn write
+    // 如果有一个chunk全0，则是了
     for _, sect := range chunks {
         isZero := true
         for _, v := range sect {
@@ -186,6 +190,7 @@ func (d *decoder) isTornEntry(data []byte) bool {
             return true
         }
     }
+
     return false
 }
 

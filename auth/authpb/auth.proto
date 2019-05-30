@@ -13,7 +13,7 @@ option (gogoproto.goproto_enum_prefix_all) = false;
 message User {
   bytes name = 1;             // 用户名
   bytes password = 2;         // 密码
-  repeated string roles = 3;  // 角色
+  repeated string roles = 3;  // 角色列表
 }
 
 // Permission is a single entity

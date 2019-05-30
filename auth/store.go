@@ -50,6 +50,7 @@ var (
 
     plog = capnslog.NewPackageLogger("go.etcd.io/etcd", "auth")
 
+    // 错误
     ErrRootUserNotExist     = errors.New("auth: root user does not exist")
     ErrRootRoleNotExist     = errors.New("auth: root user does not have root role")
     ErrUserAlreadyExist     = errors.New("auth: user already exists")

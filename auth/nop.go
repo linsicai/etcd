@@ -18,6 +18,7 @@ import (
     "context"
 )
 
+// 空操作
 type tokenNop struct{}
 
 func (t *tokenNop) enable()                         {}

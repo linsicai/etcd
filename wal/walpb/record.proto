@@ -21,7 +21,7 @@ message Record {
 
 // ====> 快照
 // 索引
-// term ？？？
+// term 任期
 message Snapshot {
 	optional uint64 index = 1 [(gogoproto.nullable) = false];
 

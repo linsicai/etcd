@@ -50,29 +50,29 @@ var (
 )
 
 func removeSingleHopHeaders(hdrs *http.Header) {
-    // 移除head
+	// 移除head
 	for _, h := range singleHopHeaders {
 		hdrs.Del(h)
 	}
 }
 
 type reverseProxy struct {
-    // 检测
-	director  *director
+	// 检测
+	director *director
 
-    // 接口
+	// 接口
 	transport http.RoundTripper
 }
 
 func (p *reverseProxy) ServeHTTP(rw http.ResponseWriter, clientreq *http.Request) {
-    // 打点
+	// 打点
 	reportIncomingRequest(clientreq)
-	
+
 	// 申请数据
 	proxyreq := new(http.Request)
 	*proxyreq = *clientreq
 
-    // 开始计时
+	// 开始计时
 	startTime := time.Now()
 
 	var (
@@ -81,7 +81,7 @@ func (p *reverseProxy) ServeHTTP(rw http.ResponseWriter, clientreq *http.Request
 	)
 
 	if clientreq.Body != nil {
-	    // 读取请求体
+		// 读取请求体
 		proxybody, err = ioutil.ReadAll(clientreq.Body)
 		if err != nil {
 			msg := fmt.Sprintf("failed to read request body: %v", err)
@@ -94,21 +94,21 @@ func (p *reverseProxy) ServeHTTP(rw http.ResponseWriter, clientreq *http.Request
 		}
 	}
 
-    // 复制http 头
+	// 复制http 头
 	// deep-copy the headers, as these will be modified below
 	proxyreq.Header = make(http.Header)
 	copyHeader(proxyreq.Header, clientreq.Header)
 
-    // 归一化请求
+	// 归一化请求
 	normalizeRequest(proxyreq)
 
-    // 移除不支持head
+	// 移除不支持head
 	removeSingleHopHeaders(&proxyreq.Header)
 
-    // 设置转发信息
+	// 设置转发信息
 	maybeSetForwardedFor(proxyreq)
 
-    // 找一个后端
+	// 找一个后端
 	endpoints := p.director.endpoints()
 	if len(endpoints) == 0 {
 		msg := "zero endpoints currently available"
@@ -125,31 +125,31 @@ func (p *reverseProxy) ServeHTTP(rw http.ResponseWriter, clientreq *http.Request
 
 	var requestClosed int32
 
-    // 完成信号量
+	// 完成信号量
 	completeCh := make(chan bool, 1)
 
-    // 是否支持关闭通知
+	// 是否支持关闭通知
 	closeNotifier, ok := rw.(http.CloseNotifier)
 
-    // 获取上下文
+	// 获取上下文
 	ctx, cancel := context.WithCancel(context.Background())
 	proxyreq = proxyreq.WithContext(ctx)
 
 	defer cancel()
 	if ok {
-	    // 获取关闭信号量
+		// 获取关闭信号量
 		closeCh := closeNotifier.CloseNotify()
 
 		go func() {
-		    // 异步执行
+			// 异步执行
 			select {
 			case <-closeCh:
-			    // 设置请求关闭，打印日志，做取消
+				// 设置请求关闭，打印日志，做取消
 				atomic.StoreInt32(&requestClosed, 1)
 				plog.Printf("client %v closed request prematurely", clientreq.RemoteAddr)
 				cancel()
 			case <-completeCh:
-			    // 结束了
+				// 结束了
 			}
 		}()
 
@@ -161,33 +161,33 @@ func (p *reverseProxy) ServeHTTP(rw http.ResponseWriter, clientreq *http.Request
 	var res *http.Response
 
 	for _, ep := range endpoints {
-	    // 做转发
+		// 做转发
 		if proxybody != nil {
 			proxyreq.Body = ioutil.NopCloser(bytes.NewBuffer(proxybody))
 		}
 		redirectRequest(proxyreq, ep.URL)
 
-        // 转发
+		// 转发
 		res, err = p.transport.RoundTrip(proxyreq)
 
-        // 如果请求关闭
+		// 如果请求关闭
 		if atomic.LoadInt32(&requestClosed) == 1 {
 			return
 		}
 
 		if err != nil {
-		    // 转发失败，轮询
+			// 转发失败，轮询
 			reportRequestDropped(clientreq, failedSendingRequest)
 			plog.Printf("failed to direct request to %s: %v", ep.URL.String(), err)
 			ep.Failed()
 			continue
 		}
 
-        // 成功了
+		// 成功了
 		break
 	}
 
-    // 响应出错
+	// 响应出错
 	if res == nil {
 		// TODO: limit the rate of the error logging.
 		msg := fmt.Sprintf("unable to get response from %d endpoint(s)", len(endpoints))
@@ -207,7 +207,7 @@ func (p *reverseProxy) ServeHTTP(rw http.ResponseWriter, clientreq *http.Request
 	removeSingleHopHeaders(&res.Header)
 	copyHeader(rw.Header(), res.Header)
 
-    // 写状态
+	// 写状态
 	rw.WriteHeader(res.StatusCode)
 	// 写回报体
 	io.Copy(rw, res.Body)

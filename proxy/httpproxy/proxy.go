@@ -46,7 +46,7 @@ type GetProxyURLs func() []string
 // which will proxy requests to an etcd cluster.
 // The handler will periodically update its view of the cluster.
 func NewHandler(t *http.Transport, urlsFunc GetProxyURLs, failureWait time.Duration, refreshInterval time.Duration) http.Handler {
-    // 加密
+	// 加密
 	if t.TLSClientConfig != nil {
 		// Enable http2, see Issue 5033.
 		err := http2.ConfigureTransport(t)
@@ -55,13 +55,13 @@ func NewHandler(t *http.Transport, urlsFunc GetProxyURLs, failureWait time.Durat
 		}
 	}
 
-    // 配置proxy，路由与加密
+	// 配置proxy，路由与加密
 	p := &reverseProxy{
 		director:  newDirector(urlsFunc, failureWait, refreshInterval),
 		transport: t,
 	}
 
-    // http
+	// http
 	mux := http.NewServeMux()
 	mux.Handle("/", p)
 	mux.HandleFunc("/v2/config/local/proxy", p.configHandler)
@@ -87,12 +87,12 @@ func readonlyHandlerFunc(next http.Handler) func(http.ResponseWriter, *http.Requ
 }
 
 func (p *reverseProxy) configHandler(w http.ResponseWriter, r *http.Request) {
-    // 方法校验
+	// 方法校验
 	if !allowMethod(w, r.Method, "GET") {
 		return
 	}
 
-    // 可用eps
+	// 可用eps
 	eps := p.director.endpoints()
 	epstr := make([]string, len(eps))
 	for i, e := range eps {
@@ -112,15 +112,15 @@ func (p *reverseProxy) configHandler(w http.ResponseWriter, r *http.Request) {
 // and if not, it writes an error to w.  A boolean is returned indicating
 // whether or not the method is allowed.
 func allowMethod(w http.ResponseWriter, m string, ms ...string) bool {
-    // 校验是否在allow 列表里面
+	// 校验是否在allow 列表里面
 	for _, meth := range ms {
 		if m == meth {
-		    // 校验通过
+			// 校验通过
 			return true
 		}
 	}
 
-    // 报错
+	// 报错
 	w.Header().Set("Allow", strings.Join(ms, ","))
 	http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 	return false

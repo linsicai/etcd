@@ -69,7 +69,7 @@ const (
 )
 
 func init() {
-    // 统计注册
+	// 统计注册
 	prometheus.MustRegister(requestsIncoming)
 	prometheus.MustRegister(requestsHandled)
 	prometheus.MustRegister(requestsDropped)

@@ -29,16 +29,16 @@ import (
 var plog = capnslog.NewPackageLogger("go.etcd.io/etcd", "proxy/tcpproxy")
 
 type remote struct {
-    // 锁
-	mu       sync.Mutex
+	// 锁
+	mu sync.Mutex
 
-    // 服务
-	srv      *net.SRV
+	// 服务
+	srv *net.SRV
 
-    // 地址
-	addr     string
+	// 地址
+	addr string
 
-    // 是否失效
+	// 是否失效
 	inactive bool
 }
 
@@ -51,18 +51,18 @@ func (r *remote) inactivate() {
 }
 
 func (r *remote) tryReactivate() error {
-    // ping 地址
+	// ping 地址
 	conn, err := net.Dial("tcp", r.addr)
 	if err != nil {
 		return err
 	}
 	conn.Close()
 
-    // 加锁
+	// 加锁
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-    // 设置有效
+	// 设置有效
 	r.inactive = false
 	return nil
 }
@@ -76,32 +76,33 @@ func (r *remote) isActive() bool {
 }
 
 type TCPProxy struct {
-    // 日志
-	Logger          *zap.Logger
+	// 日志
+	Logger *zap.Logger
 
-    // 监听者
-	Listener        net.Listener
+	// 监听者
+	Listener net.Listener
 
-    // 后端配置
-	Endpoints       []*net.SRV
+	// 后端配置
+	Endpoints []*net.SRV
 
-    // 监控间隔
+	// 监控间隔
 	MonitorInterval time.Duration
 
-    // 推出信号量
+	// 推出信号量
 	donec chan struct{}
 
-    // 锁
-	mu        sync.Mutex // guards the following fields
+	// 锁
+	mu sync.Mutex // guards the following fields
 
-    // 后台
-	remotes   []*remote
+	// 后台
+	remotes []*remote
 
-    // 轮询用
+	// 轮询用
 	pickCount int // for round robin
 }
 
 func (tp *TCPProxy) Run() error {
+	// 加载配置
 	tp.donec = make(chan struct{})
 	if tp.MonitorInterval == 0 {
 		tp.MonitorInterval = 5 * time.Minute
@@ -111,6 +112,7 @@ func (tp *TCPProxy) Run() error {
 		tp.remotes = append(tp.remotes, &remote{srv: srv, addr: addr})
 	}
 
+	// 打印日志
 	eps := []string{}
 	for _, ep := range tp.Endpoints {
 		eps = append(eps, fmt.Sprintf("%s:%d", ep.Target, ep.Port))
@@ -121,13 +123,17 @@ func (tp *TCPProxy) Run() error {
 		plog.Printf("ready to proxy client requests to %+v", eps)
 	}
 
+	// 异步监控
 	go tp.runMonitor()
+
 	for {
+		// 监听
 		in, err := tp.Listener.Accept()
 		if err != nil {
 			return err
 		}
 
+		// 服务
 		go tp.serve(in)
 	}
 }
@@ -196,17 +202,23 @@ func (tp *TCPProxy) serve(in net.Conn) {
 	)
 
 	for {
+		// 选一个后端
 		tp.mu.Lock()
 		remote := tp.pick()
 		tp.mu.Unlock()
 		if remote == nil {
+			// 全部死了
 			break
 		}
+
 		// TODO: add timeout
 		out, err = net.Dial("tcp", remote.addr)
 		if err == nil {
+			// 选中可用
 			break
 		}
+
+		// 不可用，干掉它
 		remote.inactivate()
 		if tp.Logger != nil {
 			tp.Logger.Warn("deactivated endpoint", zap.String("address", remote.addr), zap.Duration("interval", tp.MonitorInterval), zap.Error(err))
@@ -216,10 +228,12 @@ func (tp *TCPProxy) serve(in net.Conn) {
 	}
 
 	if out == nil {
+		// 无可用后端
 		in.Close()
 		return
 	}
 
+	// 转发
 	go func() {
 		io.Copy(in, out)
 		in.Close()
@@ -235,12 +249,16 @@ func (tp *TCPProxy) runMonitor() {
 	for {
 		select {
 		case <-time.After(tp.MonitorInterval):
+			// 定期事件
 			tp.mu.Lock()
 			for _, rem := range tp.remotes {
 				if rem.isActive() {
+					// 活者
 					continue
 				}
+
 				go func(r *remote) {
+					// 尝试激活
 					if err := r.tryReactivate(); err != nil {
 						if tp.Logger != nil {
 							tp.Logger.Warn("failed to activate endpoint (stay inactive for another interval)", zap.String("address", r.addr), zap.Duration("interval", tp.MonitorInterval), zap.Error(err))
@@ -258,6 +276,7 @@ func (tp *TCPProxy) runMonitor() {
 			}
 			tp.mu.Unlock()
 		case <-tp.donec:
+			// 结束
 			return
 		}
 	}
@@ -269,6 +288,6 @@ func (tp *TCPProxy) Stop() {
 	// 关闭监听者
 	tp.Listener.Close()
 
-    // 通知结束
+	// 通知结束
 	close(tp.donec)
 }

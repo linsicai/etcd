@@ -30,11 +30,11 @@ import (
 )
 
 var (
-    // http handler
+	// http handler
 	LeasePrefix         = "/leases"
 	LeaseInternalPrefix = "/leases/internal"
 
-    // 超时
+	// 超时
 	applyTimeout        = time.Second
 	ErrLeaseHTTPTimeout = errors.New("waiting for node to catch up its applied index has timed out")
 )
@@ -45,15 +45,15 @@ func NewHandler(l lease.Lessor, waitch func() <-chan struct{}) http.Handler {
 }
 
 type leaseHandler struct {
-    // 租约
-	l      lease.Lessor
+	// 租约
+	l lease.Lessor
 
-    // 等待通道
+	// 等待通道
 	waitch func() <-chan struct{}
 }
 
 func (h *leaseHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-    // 校验请求
+	// 校验请求
 	if r.Method != "POST" {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		return
@@ -66,10 +66,10 @@ func (h *leaseHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	var v []byte
 
-    // 分配
+	// 分配
 	switch r.URL.Path {
 	case LeasePrefix:
-	    // 解请求包
+		// 解请求包
 		lreq := pb.LeaseKeepAliveRequest{}
 		if uerr := lreq.Unmarshal(b); uerr != nil {
 			http.Error(w, "error unmarshalling request", http.StatusBadRequest)
@@ -79,15 +79,15 @@ func (h *leaseHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-h.waitch():
 		case <-time.After(applyTimeout):
-		    // 超时了
+			// 超时了
 			http.Error(w, ErrLeaseHTTPTimeout.Error(), http.StatusRequestTimeout)
 			return
 		}
 
-        // 新的id
+		// 新的id
 		ttl, rerr := h.l.Renew(lease.LeaseID(lreq.ID))
 		if rerr != nil {
-		    // 创建失败
+			// 创建失败
 			if rerr == lease.ErrLeaseNotFound {
 				http.Error(w, rerr.Error(), http.StatusNotFound)
 				return
@@ -97,7 +97,7 @@ func (h *leaseHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-        // 打包
+		// 打包
 		// TODO: fill out ResponseHeader
 		resp := &pb.LeaseKeepAliveResponse{ID: lreq.ID, TTL: ttl}
 		v, err = resp.Marshal()
@@ -107,14 +107,14 @@ func (h *leaseHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 	case LeaseInternalPrefix:
-	    // 解请求包
+		// 解请求包
 		lreq := leasepb.LeaseInternalRequest{}
 		if lerr := lreq.Unmarshal(b); lerr != nil {
 			http.Error(w, "error unmarshalling request", http.StatusBadRequest)
 			return
 		}
 
-        // 处理
+		// 处理
 		select {
 		case <-h.waitch():
 		case <-time.After(applyTimeout):
@@ -122,14 +122,14 @@ func (h *leaseHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-        // 查找
+		// 查找
 		l := h.l.Lookup(lease.LeaseID(lreq.LeaseTimeToLiveRequest.ID))
 		if l == nil {
 			http.Error(w, lease.ErrLeaseNotFound.Error(), http.StatusNotFound)
 			return
 		}
 
-        // 打包
+		// 打包
 		// TODO: fill out ResponseHeader
 		resp := &leasepb.LeaseInternalResponse{
 			LeaseTimeToLiveResponse: &pb.LeaseTimeToLiveResponse{
@@ -140,7 +140,7 @@ func (h *leaseHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			},
 		}
 
-        // 拼回包
+		// 拼回包
 		if lreq.LeaseTimeToLiveRequest.Keys {
 			ks := l.Keys()
 			kbs := make([][]byte, len(ks))
@@ -150,7 +150,7 @@ func (h *leaseHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			resp.LeaseTimeToLiveResponse.Keys = kbs
 		}
 
-        // 序列化
+		// 序列化
 		v, err = resp.Marshal()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -162,7 +162,7 @@ func (h *leaseHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-    // 写结果
+	// 写结果
 	w.Header().Set("Content-Type", "application/protobuf")
 	w.Write(v)
 }

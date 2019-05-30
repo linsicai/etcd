@@ -50,7 +50,7 @@ var (
 	// maximum number of lease checkpoints to batch into a single consensus log entry
 	maxLeaseCheckpointBatchSize = 1000
 
-    // 错误
+	// 错误
 	ErrNotPrimary       = errors.New("not a primary lessor")
 	ErrLeaseNotFound    = errors.New("lease not found")
 	ErrLeaseExists      = errors.New("lease already exists")
@@ -154,21 +154,21 @@ type Lessor interface {
 // lessor implements Lessor interface.
 // TODO: use clockwork for testability.
 type lessor struct {
-    // suow
+	// suow
 	mu sync.RWMutex
 
 	// demotec is set when the lessor is the primary.
 	// demotec will be closed if the lessor is demoted.
 	demotec chan struct{}
 
-    // 租约映射表
-	leaseMap            map[LeaseID]*Lease
+	// 租约映射表
+	leaseMap map[LeaseID]*Lease
 	// 超时堆
-	leaseHeap           LeaseQueue
+	leaseHeap LeaseQueue
 	// checkpoint 堆
 	leaseCheckpointHeap LeaseQueue
 	// 反向映射表
-	itemMap             map[LeaseItem]LeaseID
+	itemMap map[LeaseItem]LeaseID
 
 	// When a lease expires, the lessor will delete the
 	// leased range (or key) by the RangeDeleter.
@@ -190,7 +190,7 @@ type lessor struct {
 	// 最小ttl
 	minLeaseTTL int64
 
-    // 超时通道
+	// 超时通道
 	expiredC chan []*Lease
 
 	// stopC is a channel whose closure indicates that the lessor should be stopped.
@@ -201,7 +201,7 @@ type lessor struct {
 	// 结束信号
 	doneC chan struct{}
 
-    // 日志
+	// 日志
 	lg *zap.Logger
 
 	// Wait duration between lease checkpoints.
@@ -211,10 +211,10 @@ type lessor struct {
 
 // 租约配置
 type LessorConfig struct {
-    // 最小ttl
-	MinLeaseTTL        int64
+	// 最小ttl
+	MinLeaseTTL int64
 
-    // checkpoint 间隔
+	// checkpoint 间隔
 	CheckpointInterval time.Duration
 }
 
@@ -223,13 +223,13 @@ func NewLessor(lg *zap.Logger, b backend.Backend, cfg LessorConfig) Lessor {
 }
 
 func newLessor(lg *zap.Logger, b backend.Backend, cfg LessorConfig) *lessor {
-    // 取checkpoint 间隔，默认5分钟
+	// 取checkpoint 间隔，默认5分钟
 	checkpointInterval := cfg.CheckpointInterval
 	if checkpointInterval == 0 {
 		checkpointInterval = 5 * time.Minute
 	}
 
-    // 构造函数
+	// 构造函数
 	l := &lessor{
 		leaseMap:            make(map[LeaseID]*Lease),
 		itemMap:             make(map[LeaseItem]LeaseID),
@@ -245,10 +245,10 @@ func newLessor(lg *zap.Logger, b backend.Backend, cfg LessorConfig) *lessor {
 		lg:       lg,
 	}
 
-    // 初始化
+	// 初始化
 	l.initAndRecover()
 
-    // 启动后台流程
+	// 启动后台流程
 	go l.runLoop()
 
 	return l
@@ -287,7 +287,7 @@ func (le *lessor) SetCheckpointer(cp Checkpointer) {
 }
 
 func (le *lessor) Grant(id LeaseID, ttl int64) (*Lease, error) {
-    // 参数校验
+	// 参数校验
 	if id == NoLease {
 		return nil, ErrLeaseNotFound
 	}
@@ -305,42 +305,42 @@ func (le *lessor) Grant(id LeaseID, ttl int64) (*Lease, error) {
 		revokec: make(chan struct{}),
 	}
 
-    // 加锁
+	// 加锁
 	le.mu.Lock()
 	defer le.mu.Unlock()
 
-    // 校验是否存在
+	// 校验是否存在
 	if _, ok := le.leaseMap[id]; ok {
 		return nil, ErrLeaseExists
 	}
 
-    // 校正配置
+	// 校正配置
 	if l.ttl < le.minLeaseTTL {
 		l.ttl = le.minLeaseTTL
 	}
 
-    // 为主设置超时时间
+	// 为主设置超时时间
 	if le.isPrimary() {
 		l.refresh(0)
 	} else {
 		l.forever()
 	}
 
-    // 入映射表
+	// 入映射表
 	le.leaseMap[id] = l
 
 	// 入超时队列
 	item := &LeaseWithTime{id: l.ID, time: l.expiry.UnixNano()}
 	heap.Push(&le.leaseHeap, item)
 
-    // 落盘
+	// 落盘
 	l.persistTo(le.b)
 
-    // 统计
+	// 统计
 	leaseTotalTTLs.Observe(float64(l.ttl))
 	leaseGranted.Inc()
 
-    // 放入checkpoint 队列
+	// 放入checkpoint 队列
 	if le.isPrimary() {
 		le.scheduleCheckpointIfNeeded(l)
 	}
@@ -354,19 +354,19 @@ func (le *lessor) Revoke(id LeaseID) error {
 
 	l := le.leaseMap[id]
 	if l == nil {
-	    // 无此id
+		// 无此id
 		le.mu.Unlock()
 		return ErrLeaseNotFound
 	}
 
-    // 处理完后通知
+	// 处理完后通知
 	defer close(l.revokec)
 
 	// unlock before doing external work
 	le.mu.Unlock()
 
 	if le.rd == nil {
-	    // 不需要后续处理
+		// 不需要后续处理
 		return nil
 	}
 
@@ -378,14 +378,14 @@ func (le *lessor) Revoke(id LeaseID) error {
 	keys := l.Keys()
 	sort.StringSlice(keys).Sort()
 	for _, key := range keys {
-	    // 删除key
+		// 删除key
 		txn.DeleteRange([]byte(key), nil)
 	}
 
 	le.mu.Lock()
 	defer le.mu.Unlock()
 
-    // 删除租约
+	// 删除租约
 	delete(le.leaseMap, l.ID)
 
 	// lease deletion needs to be in the same backend transaction with the
@@ -401,7 +401,7 @@ func (le *lessor) Revoke(id LeaseID) error {
 }
 
 func (le *lessor) Checkpoint(id LeaseID, remainingTTL int64) error {
-    // 加锁
+	// 加锁
 	le.mu.Lock()
 	defer le.mu.Unlock()
 
@@ -438,12 +438,12 @@ func (le *lessor) Renew(id LeaseID) (int64, error) {
 
 	l := le.leaseMap[id]
 	if l == nil {
-	    // 无此ID
+		// 无此ID
 		return -1, ErrLeaseNotFound
 	}
 
 	if l.expired() {
-	    // 超时了
+		// 超时了
 		le.mu.Unlock()
 		unlock = func() {}
 
@@ -452,15 +452,15 @@ func (le *lessor) Renew(id LeaseID) (int64, error) {
 		// quorum to be revoked. To be accurate, renew request must wait for the
 		// deletion to complete.
 		case <-l.revokec:
-		    // 销毁了
+			// 销毁了
 			return -1, ErrLeaseNotFound
 		// The expired lease might fail to be revoked if the primary changes.
 		// The caller will retry on ErrNotPrimary.
 		case <-demotec:
-		    // 降级了
+			// 降级了
 			return -1, ErrNotPrimary
 		case <-le.stopC:
-		    // 停机了
+			// 停机了
 			return -1, ErrNotPrimary
 		}
 	}
@@ -469,16 +469,16 @@ func (le *lessor) Renew(id LeaseID) (int64, error) {
 	// By applying a RAFT entry only when the remainingTTL is already set, we limit the number
 	// of RAFT entries written per lease to a max of 2 per checkpoint interval.
 	if le.cp != nil && l.remainingTTL > 0 {
-	    // checkpoint
+		// checkpoint
 		le.cp(context.Background(), &pb.LeaseCheckpointRequest{Checkpoints: []*pb.LeaseCheckpoint{{ID: int64(l.ID), Remaining_TTL: 0}}})
 	}
 
-    // 入超时队列
+	// 入超时队列
 	l.refresh(0)
 	item := &LeaseWithTime{id: l.ID, time: l.expiry.UnixNano()}
 	heap.Push(&le.leaseHeap, item)
 
-    // 统计
+	// 统计
 	leaseRenewed.Inc()
 
 	return l.ttl, nil
@@ -518,15 +518,15 @@ func (le *lessor) Promote(extend time.Duration) {
 	le.mu.Lock()
 	defer le.mu.Unlock()
 
-    // 创建降级通道
+	// 创建降级通道
 	le.demotec = make(chan struct{})
 
 	// refresh the expiries of all leases.
 	for _, l := range le.leaseMap {
-	    // 给一定时间
+		// 给一定时间
 		l.refresh(extend)
 
-        // 入超时队列
+		// 入超时队列
 		item := &LeaseWithTime{id: l.ID, time: l.expiry.UnixNano()}
 		heap.Push(&le.leaseHeap, item)
 	}
@@ -542,7 +542,7 @@ func (le *lessor) Promote(extend time.Duration) {
 	leases := le.unsafeLeases()
 	sort.Sort(leasesByExpiry(leases))
 
-    // 按每秒淘汰多少入队列
+	// 按每秒淘汰多少入超时队列
 	baseWindow := leases[0].Remaining()
 	nextWindow := baseWindow + time.Second
 	expires := 0
@@ -552,7 +552,7 @@ func (le *lessor) Promote(extend time.Duration) {
 	for _, l := range leases {
 		remaining := l.Remaining()
 		if remaining > nextWindow {
-		    // 更新窗口
+			// 更新窗口
 			baseWindow = remaining
 			nextWindow = baseWindow + time.Second
 			expires = 1
@@ -561,11 +561,11 @@ func (le *lessor) Promote(extend time.Duration) {
 
 		expires++
 		if expires <= targetExpiresPerSecond {
-		    // 未到目标
+			// 未到目标
 			continue
 		}
 
-        // 需要销毁
+		// 需要销毁
 		rateDelay := float64(time.Second) * (float64(expires) / float64(targetExpiresPerSecond))
 		// If leases are extended by n seconds, leases n seconds ahead of the
 		// base window should be extended by only one second.
@@ -574,18 +574,19 @@ func (le *lessor) Promote(extend time.Duration) {
 		delay := time.Duration(rateDelay)
 		nextWindow = baseWindow + delay
 
-        // 入超时队列
+		// 入超时队列
 		l.refresh(delay + extend)
 		item := &LeaseWithTime{id: l.ID, time: l.expiry.UnixNano()}
 		heap.Push(&le.leaseHeap, item)
 
-        // 需要checkpoint
+		// 需要checkpoint
 		le.scheduleCheckpointIfNeeded(l)
 	}
 }
 
 // 排序用
 type leasesByExpiry []*Lease
+
 func (le leasesByExpiry) Len() int           { return len(le) }
 func (le leasesByExpiry) Less(i, j int) bool { return le[i].Remaining() < le[j].Remaining() }
 func (le leasesByExpiry) Swap(i, j int)      { le[i], le[j] = le[j], le[i] }
@@ -597,14 +598,14 @@ func (le *lessor) Demote() {
 
 	// set the expiries of all leases to forever
 	for _, l := range le.leaseMap {
-	    // 设置为永不超时
+		// 设置为永不超时
 		l.forever()
 	}
 
-    // 清除checkpoint 队列
+	// 清除checkpoint 队列
 	le.clearScheduledLeasesCheckpoints()
 
-    // 通知降级
+	// 通知降级
 	if le.demotec != nil {
 		close(le.demotec)
 
@@ -621,16 +622,16 @@ func (le *lessor) Attach(id LeaseID, items []LeaseItem) error {
 
 	l := le.leaseMap[id]
 	if l == nil {
-	    // 无租约id
+		// 无租约id
 		return ErrLeaseNotFound
 	}
 
 	l.mu.Lock()
 	for _, it := range items {
-	    // 入租约
+		// 入租约
 		l.itemSet[it] = struct{}{}
 
-        // 方向映射
+		// 方向映射
 		le.itemMap[it] = id
 	}
 	l.mu.Unlock()
@@ -655,16 +656,16 @@ func (le *lessor) Detach(id LeaseID, items []LeaseItem) error {
 
 	l := le.leaseMap[id]
 	if l == nil {
-	    // 无id
+		// 无id
 		return ErrLeaseNotFound
 	}
 
 	l.mu.Lock()
 	for _, it := range items {
-	    // 重租约中移除
+		// 重租约中移除
 		delete(l.itemSet, it)
 
-        // 移除映射表
+		// 移除映射表
 		delete(le.itemMap, it)
 	}
 	l.mu.Unlock()
@@ -690,30 +691,30 @@ func (le *lessor) ExpiredLeasesC() <-chan []*Lease {
 }
 
 func (le *lessor) Stop() {
-    // 触发停机信号
+	// 触发停机信号
 	close(le.stopC)
 
-    // 等待结束
+	// 等待结束
 	<-le.doneC
 }
 
 func (le *lessor) runLoop() {
-    // 设置结束通道
+	// 设置结束通道
 	defer close(le.doneC)
 
-    // 循环
+	// 循环
 	for {
-	    // 移除超时
+		// 移除超时
 		le.revokeExpiredLeases()
 
-        // 定期checkpoint
+		// 定期checkpoint
 		le.checkpointScheduledLeases()
 
 		select {
 		case <-time.After(500 * time.Millisecond):
-		    // 收到超时事件
+			// 收到超时事件
 		case <-le.stopC:
-		    // 收到停止信号
+			// 收到停止信号
 			return
 		}
 	}
@@ -728,7 +729,7 @@ func (le *lessor) revokeExpiredLeases() {
 	// rate limit
 	revokeLimit := leaseRevokeRate / 2
 
-    // 找超时
+	// 找超时
 	le.mu.RLock()
 	if le.isPrimary() {
 		ls = le.findExpiredLeases(revokeLimit)
@@ -738,12 +739,12 @@ func (le *lessor) revokeExpiredLeases() {
 	if len(ls) != 0 {
 		select {
 		case <-le.stopC:
-		    // 收到停止信号
+			// 收到停止信号
 			return
 		case le.expiredC <- ls:
-		    // 通知超时
+			// 通知超时
 		default:
-		    // 其他
+			// 其他
 			// the receiver of expiredC is probably busy handling
 			// other stuff
 			// let's try this next time after 500ms
@@ -759,24 +760,24 @@ func (le *lessor) checkpointScheduledLeases() {
 	// rate limit
 	// 速度控制
 	for i := 0; i < leaseCheckpointRate/2; i++ {
-	    // 找事做
+		// 找事做
 		le.mu.Lock()
 		if le.isPrimary() {
 			cps = le.findDueScheduledCheckpoints(maxLeaseCheckpointBatchSize)
 		}
 		le.mu.Unlock()
 
-        // 做事情
+		// 做事情
 		if len(cps) != 0 {
 			le.cp(context.Background(), &pb.LeaseCheckpointRequest{Checkpoints: cps})
 		}
 
 		if len(cps) < maxLeaseCheckpointBatchSize {
-		    // 没得做了
+			// 没得做了
 			return
 		}
 
-        // 继续做
+		// 继续做
 	}
 }
 
@@ -790,7 +791,7 @@ func (le *lessor) clearScheduledLeasesCheckpoints() {
 // "next" is true, to indicate that it may exist in next attempt.
 func (le *lessor) expireExists() (l *Lease, ok bool, next bool) {
 	if le.leaseHeap.Len() == 0 {
-	    // 数据为空
+		// 数据为空
 		return nil, false, false
 	}
 
@@ -812,7 +813,7 @@ func (le *lessor) expireExists() (l *Lease, ok bool, next bool) {
 	}
 	// if the lease is actually expired, add to the removal list. If it is not expired, we can ignore it because another entry will have been inserted into the heap
 
-    // 超时了
+	// 超时了
 	heap.Pop(&le.leaseHeap) // O(log N)
 	return l, true, false
 }
@@ -820,27 +821,27 @@ func (le *lessor) expireExists() (l *Lease, ok bool, next bool) {
 // findExpiredLeases loops leases in the leaseMap until reaching expired limit
 // and returns the expired leases that needed to be revoked.
 func (le *lessor) findExpiredLeases(limit int) []*Lease {
-    // 初始化，假设为十六
+	// 初始化，假设为十六
 	leases := make([]*Lease, 0, 16)
 
 	for {
 		l, ok, next := le.expireExists()
 		if !ok && !next {
-		    // 无超时，无数据
+			// 无超时，无数据
 			break
 		}
 
 		if !ok {
-		    // 无数据，继续取
+			// 无数据，继续取
 			continue
 		}
 		if next {
-		    // 继续取
+			// 继续取
 			continue
 		}
 
 		if l.expired() {
-		    // 超时处理
+			// 超时处理
 			leases = append(leases, l)
 
 			// reach expired limit
@@ -855,12 +856,12 @@ func (le *lessor) findExpiredLeases(limit int) []*Lease {
 
 func (le *lessor) scheduleCheckpointIfNeeded(lease *Lease) {
 	if le.cp == nil {
-	    // 不需要
+		// 不需要
 		return
 	}
 
 	if lease.RemainingTTL() > int64(le.checkpointInterval.Seconds()) {
-	    // 日志
+		// 日志
 		if le.lg != nil {
 			le.lg.Debug("Scheduling lease checkpoint",
 				zap.Int64("leaseID", int64(lease.ID)),
@@ -868,7 +869,7 @@ func (le *lessor) scheduleCheckpointIfNeeded(lease *Lease) {
 			)
 		}
 
-        // checkpoint 超时队列
+		// checkpoint 超时队列
 		heap.Push(&le.leaseCheckpointHeap, &LeaseWithTime{
 			id:   lease.ID,
 			time: time.Now().Add(le.checkpointInterval).UnixNano(),
@@ -879,43 +880,43 @@ func (le *lessor) scheduleCheckpointIfNeeded(lease *Lease) {
 // 找需要checkpoint的项
 func (le *lessor) findDueScheduledCheckpoints(checkpointLimit int) []*pb.LeaseCheckpoint {
 	if le.cp == nil {
-	    // 不需要
+		// 不需要
 		return nil
 	}
 
 	now := time.Now()
 	cps := []*pb.LeaseCheckpoint{}
 
-    // 循环
+	// 循环
 	for le.leaseCheckpointHeap.Len() > 0 && len(cps) < checkpointLimit {
 		lt := le.leaseCheckpointHeap[0]
 		if lt.time /* next checkpoint time */ > now.UnixNano() {
-		    // 队列头未超时，结束
+			// 队列头未超时，结束
 			return cps
 		}
 
-        // 弹出
+		// 弹出
 		heap.Pop(&le.leaseCheckpointHeap)
 
 		var l *Lease
 		var ok bool
 		if l, ok = le.leaseMap[lt.id]; !ok {
-		    // 无数据，继续
+			// 无数据，继续
 			continue
 		}
 
 		if !now.Before(l.expiry) {
-		    // 未到时间
+			// 未到时间
 			continue
 		}
 
 		remainingTTL := int64(math.Ceil(l.expiry.Sub(now).Seconds()))
 		if remainingTTL >= l.ttl {
-		    // 还有ttl
+			// 还有ttl
 			continue
 		}
 
-        // 日志
+		// 日志
 		if le.lg != nil {
 			le.lg.Debug("Checkpointing lease",
 				zap.Int64("leaseID", int64(lt.id)),
@@ -923,7 +924,7 @@ func (le *lessor) findDueScheduledCheckpoints(checkpointLimit int) []*pb.LeaseCh
 			)
 		}
 
-        // 需要处理
+		// 需要处理
 		cps = append(cps, &pb.LeaseCheckpoint{ID: int64(lt.id), Remaining_TTL: remainingTTL})
 	}
 
@@ -931,20 +932,20 @@ func (le *lessor) findDueScheduledCheckpoints(checkpointLimit int) []*pb.LeaseCh
 }
 
 func (le *lessor) initAndRecover() {
-    // 事务
+	// 事务
 	tx := le.b.BatchTx()
 
-    // 加锁
+	// 加锁
 	tx.Lock()
 
-    // 创建bucket
+	// 创建bucket
 	tx.UnsafeCreateBucket(leaseBucketName)
 
-    // 加载数据
+	// 加载数据
 	_, vs := tx.UnsafeRange(leaseBucketName, int64ToBytes(0), int64ToBytes(math.MaxInt64), 0)
 	// TODO: copy vs and do decoding outside tx lock if lock contention becomes an issue.
 	for i := range vs {
-	    // 反序列化
+		// 反序列化
 		var lpb leasepb.Lease
 		err := lpb.Unmarshal(vs[i])
 		if err != nil {
@@ -952,13 +953,13 @@ func (le *lessor) initAndRecover() {
 			panic("failed to unmarshal lease proto item")
 		}
 
-        // ID
+		// ID
 		ID := LeaseID(lpb.ID)
 		if lpb.TTL < le.minLeaseTTL {
 			lpb.TTL = le.minLeaseTTL
 		}
 
-        // 初始化
+		// 初始化
 		le.leaseMap[ID] = &Lease{
 			ID:  ID,
 			ttl: lpb.TTL,
@@ -970,39 +971,39 @@ func (le *lessor) initAndRecover() {
 		}
 	}
 
-    // 建堆
+	// 建堆
 	heap.Init(&le.leaseHeap)
 	heap.Init(&le.leaseCheckpointHeap)
 
-    // 解锁
+	// 解锁
 	tx.Unlock()
 
-    // 提交
+	// 提交
 	le.b.ForceCommit()
 }
 
 type Lease struct {
-    // id
-	ID           LeaseID
+	// id
+	ID LeaseID
 
-    // ttl
-	ttl          int64 // time to live of the lease in seconds
+	// ttl
+	ttl int64 // time to live of the lease in seconds
 
-    // 剩余时间
+	// 剩余时间
 	remainingTTL int64 // remaining time to live in seconds, if zero valued it is considered unset and the full ttl should be used
 
-    // 超时相关
+	// 超时相关
 	// expiryMu protects concurrent accesses to expiry
 	expiryMu sync.RWMutex
 	// expiry is time when lease should expire. no expiration when expiry.IsZero() is true
 	expiry time.Time
 
-    // 租约项
+	// 租约项
 	// mu protects concurrent accesses to itemSet
 	mu      sync.RWMutex
 	itemSet map[LeaseItem]struct{}
 
-    // 结束通道
+	// 结束通道
 	revokec chan struct{}
 }
 
@@ -1012,17 +1013,17 @@ func (l *Lease) expired() bool {
 }
 
 func (l *Lease) persistTo(b backend.Backend) {
-    // 字节
+	// 字节
 	key := int64ToBytes(int64(l.ID))
 
-    // 序列化值
+	// 序列化值
 	lpb := leasepb.Lease{ID: int64(l.ID), TTL: l.ttl, RemainingTTL: l.remainingTTL}
 	val, err := lpb.Marshal()
 	if err != nil {
 		panic("failed to marshal lease proto item")
 	}
 
-    // 写db
+	// 写db
 	b.BatchTx().Lock()
 	b.BatchTx().UnsafePut(leaseBucketName, key, val)
 	b.BatchTx().Unlock()
@@ -1082,11 +1083,11 @@ func (l *Lease) Remaining() time.Duration {
 	defer l.expiryMu.RUnlock()
 
 	if l.expiry.IsZero() {
-	    // 永不超时
+		// 永不超时
 		return time.Duration(math.MaxInt64)
 	}
 
-    // 返回剩余时间
+	// 返回剩余时间
 	return time.Until(l.expiry)
 }
 
@@ -1124,7 +1125,7 @@ func (fl *FakeLessor) Promote(extend time.Duration) {}
 
 func (fl *FakeLessor) Demote() {}
 
-func (fl *FakeLessor) Renew(id LeaseID) (int64, error) { return 10, nil }
+func (fl *FakeLessor) Renew(id leaseid) (int64, error) { return 10, nil }
 
 func (fl *FakeLessor) Lookup(id LeaseID) *Lease { return nil }
 

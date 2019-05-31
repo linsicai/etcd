@@ -31,6 +31,7 @@ const (
 	optTTL        = "ttl"         // ttl
 )
 
+// 已知选项
 var knownOptions = map[string]bool{
 	optSignMethod: true,
 	optPublicKey:  true,
@@ -40,19 +41,21 @@ var knownOptions = map[string]bool{
 
 var (
 	// DefaultTTL will be used when a 'ttl' is not specified
+	// 默认ttl
 	DefaultTTL = 5 * time.Minute
 )
 
 type jwtOptions struct {
-	SignMethod jwt.SigningMethod
-	PublicKey  []byte
-	PrivateKey []byte
-	TTL        time.Duration
+	SignMethod jwt.SigningMethod // 签名方法
+	PublicKey  []byte            // 公钥
+	PrivateKey []byte            // 私钥
+	TTL        time.Duration     // 超时时间
 }
 
 // ParseWithDefaults will load options from the specified map or set defaults where appropriate
 func (opts *jwtOptions) ParseWithDefaults(optMap map[string]string) error {
 	if opts.TTL == 0 && optMap[optTTL] == "" {
+		// 默认值
 		opts.TTL = DefaultTTL
 	}
 
@@ -62,6 +65,8 @@ func (opts *jwtOptions) ParseWithDefaults(optMap map[string]string) error {
 // Parse will load options from the specified map
 func (opts *jwtOptions) Parse(optMap map[string]string) error {
 	var err error
+
+	// ttol
 	if ttl := optMap[optTTL]; ttl != "" {
 		opts.TTL, err = time.ParseDuration(ttl)
 		if err != nil {
@@ -69,6 +74,7 @@ func (opts *jwtOptions) Parse(optMap map[string]string) error {
 		}
 	}
 
+	// 读取公钥
 	if file := optMap[optPublicKey]; file != "" {
 		opts.PublicKey, err = ioutil.ReadFile(file)
 		if err != nil {
@@ -76,6 +82,7 @@ func (opts *jwtOptions) Parse(optMap map[string]string) error {
 		}
 	}
 
+	// 读取私钥
 	if file := optMap[optPrivateKey]; file != "" {
 		opts.PrivateKey, err = ioutil.ReadFile(file)
 		if err != nil {
@@ -84,6 +91,7 @@ func (opts *jwtOptions) Parse(optMap map[string]string) error {
 	}
 
 	// signing method is a required field
+	// 构建签名方法
 	method := optMap[optSignMethod]
 	opts.SignMethod = jwt.GetSigningMethod(method)
 	if opts.SignMethod == nil {

@@ -592,6 +592,7 @@ func (b BytesAffineComparable) Compare(c Comparable) int {
 func NewBytesAffineInterval(begin, end []byte) Interval {
 	return Interval{BytesAffineComparable(begin), BytesAffineComparable(end)}
 }
+
 func NewBytesAffinePoint(b []byte) Interval {
 	be := make([]byte, len(b)+1)
 	copy(be, b)

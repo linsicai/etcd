@@ -27,10 +27,11 @@ import (
 
 type tokenJWT struct {
     lg         *zap.Logger
-    signMethod jwt.SigningMethod
-    key        interface{}
-    ttl        time.Duration
-    verifyOnly bool
+
+    signMethod jwt.SigningMethod // 签名方法
+    key        interface{} // key
+    ttl        time.Duration // ttl
+    verifyOnly bool // 仅验证
 }
 
 func (t *tokenJWT) enable()                         {}
@@ -45,10 +46,14 @@ func (t *tokenJWT) info(ctx context.Context, token string, rev uint64) (*AuthInf
         revision uint64
     )
 
+    // 解析出key
     parsed, err := jwt.Parse(token, func(token *jwt.Token) (interface{}, error) {
         if token.Method.Alg() != t.signMethod.Alg() {
+            // 签名方法不匹配
             return nil, errors.New("invalid signing method")
         }
+
+        // 返回key
         switch k := t.key.(type) {
         case *rsa.PrivateKey:
             return &k.PublicKey, nil
@@ -59,6 +64,7 @@ func (t *tokenJWT) info(ctx context.Context, token string, rev uint64) (*AuthInf
         }
     })
 
+    // 解析失败
     if err != nil {
         if t.lg != nil {
             t.lg.Warn(
@@ -72,6 +78,7 @@ func (t *tokenJWT) info(ctx context.Context, token string, rev uint64) (*AuthInf
         return nil, false
     }
 
+    // 认证
     claims, ok := parsed.Claims.(jwt.MapClaims)
     if !parsed.Valid || !ok {
         if t.lg != nil {
@@ -82,6 +89,7 @@ func (t *tokenJWT) info(ctx context.Context, token string, rev uint64) (*AuthInf
         return nil, false
     }
 
+    // 成功
     username = claims["username"].(string)
     revision = uint64(claims["revision"].(float64))
 
@@ -90,11 +98,13 @@ func (t *tokenJWT) info(ctx context.Context, token string, rev uint64) (*AuthInf
 
 func (t *tokenJWT) assign(ctx context.Context, username string, revision uint64) (string, error) {
     if t.verifyOnly {
+        // 仅验证
         return "", ErrVerifyOnly
     }
 
     // Future work: let a jwt token include permission information would be useful for
     // permission checking in proxy side.
+    // 生成token
     tk := jwt.NewWithClaims(t.signMethod,
         jwt.MapClaims{
             "username": username,
@@ -102,8 +112,10 @@ func (t *tokenJWT) assign(ctx context.Context, username string, revision uint64)
             "exp":      time.Now().Add(t.ttl).Unix(),
         })
 
+    // 签名
     token, err := tk.SignedString(t.key)
     if err != nil {
+        // 失败
         if t.lg != nil {
             t.lg.Warn(
                 "failed to sign a JWT token",
@@ -117,6 +129,7 @@ func (t *tokenJWT) assign(ctx context.Context, username string, revision uint64)
         return "", err
     }
 
+    // 成功
     if t.lg != nil {
         t.lg.Info(
             "created/assigned a new JWT token",
@@ -127,12 +140,15 @@ func (t *tokenJWT) assign(ctx context.Context, username string, revision uint64)
     } else {
         plog.Debugf("jwt token: %s", token)
     }
+
     return token, err
 }
 
 func newTokenProviderJWT(lg *zap.Logger, optMap map[string]string) (*tokenJWT, error) {
     var err error
     var opts jwtOptions
+
+    // 解析配置
     err = opts.ParseWithDefaults(optMap)
     if err != nil {
         if lg != nil {
@@ -143,6 +159,7 @@ func newTokenProviderJWT(lg *zap.Logger, optMap map[string]string) (*tokenJWT, e
         return nil, ErrInvalidAuthOpts
     }
 
+    // 找出不认识的key，告警
     var keys = make([]string, 0, len(optMap))
     for k := range optMap {
         if !knownOptions[k] {
@@ -157,11 +174,13 @@ func newTokenProviderJWT(lg *zap.Logger, optMap map[string]string) (*tokenJWT, e
         }
     }
 
+    // 生成key
     key, err := opts.Key()
     if err != nil {
         return nil, err
     }
 
+    // 构建结构
     t := &tokenJWT{
         lg:         lg,
         ttl:        opts.TTL,
@@ -169,6 +188,7 @@ func newTokenProviderJWT(lg *zap.Logger, optMap map[string]string) (*tokenJWT, e
         key:        key,
     }
 
+    // 公钥只能认证
     switch t.signMethod.(type) {
     case *jwt.SigningMethodECDSA:
         if _, ok := t.key.(*ecdsa.PublicKey); ok {

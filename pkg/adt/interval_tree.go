@@ -38,6 +38,7 @@ const (
 
 // Interval implements a Comparable interval [begin, end)
 // TODO: support different sorts of intervals: (a,b), [a,b], (a, b]
+// 间隔，左闭右开
 type Interval struct {
 	Begin Comparable
 	End   Comparable
@@ -47,31 +48,38 @@ type Interval struct {
 func (ivl *Interval) Compare(c Comparable) int {
 	ivl2 := c.(*Interval)
 	ivbCmpBegin := ivl.Begin.Compare(ivl2.Begin)
-	ivbCmpEnd := ivl.Begin.Compare(ivl2.End)
+	ivbCmpEnd   := ivl.Begin.Compare(ivl2.End)
 	iveCmpBegin := ivl.End.Compare(ivl2.Begin)
 
-	// ivl is left of ivl2
+	// ivl is left of ivl2，在左边
 	if ivbCmpBegin < 0 && iveCmpBegin <= 0 {
 		return -1
 	}
 
-	// iv is right of iv2
+	// iv is right of iv2，在右边
 	if ivbCmpEnd >= 0 {
 		return 1
 	}
 
+    // 有交集
 	return 0
 }
 
+// 范围节点
 type intervalNode struct {
 	// iv is the interval-value pair entry.
 	iv IntervalValue
+
 	// max endpoint of all descendent nodes.
 	max Comparable
+
+    // 左右子树，和父亲节点
 	// left and right are sorted by low endpoint of key interval
 	left, right *intervalNode
 	// parent is the direct ancestor of the node
 	parent *intervalNode
+
+    // 颜色
 	c      rbcolor
 }
 

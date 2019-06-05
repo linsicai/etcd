@@ -119,6 +119,7 @@ func (opts *jwtOptions) hmacKey() (interface{}, error) {
 	if len(opts.PrivateKey) == 0 {
 		return nil, ErrMissingKey
 	}
+
 	return opts.PrivateKey, nil
 }
 
@@ -129,6 +130,7 @@ func (opts *jwtOptions) rsaKey() (interface{}, error) {
 		err  error
 	)
 
+    // 解析私钥
 	if len(opts.PrivateKey) > 0 {
 		priv, err = jwt.ParseRSAPrivateKeyFromPEM(opts.PrivateKey)
 		if err != nil {
@@ -136,6 +138,7 @@ func (opts *jwtOptions) rsaKey() (interface{}, error) {
 		}
 	}
 
+    // 解析公钥
 	if len(opts.PublicKey) > 0 {
 		pub, err = jwt.ParseRSAPublicKeyFromPEM(opts.PublicKey)
 		if err != nil {
@@ -145,18 +148,21 @@ func (opts *jwtOptions) rsaKey() (interface{}, error) {
 
 	if priv == nil {
 		if pub == nil {
-			// Neither key given
+			// Neither key given 公钥 私钥都失败
 			return nil, ErrMissingKey
 		}
-		// Public key only, can verify tokens
+
+		// Public key only, can verify tokens 公钥ok
 		return pub, nil
 	}
 
 	// both keys provided, make sure they match
 	if pub != nil && pub.E != priv.E && pub.N.Cmp(priv.N) != 0 {
+	    // 基础校验
 		return nil, ErrKeyMismatch
 	}
 
+    // 返回私钥
 	return priv, nil
 }
 
@@ -167,6 +173,7 @@ func (opts *jwtOptions) ecKey() (interface{}, error) {
 		err  error
 	)
 
+    // 解析私钥
 	if len(opts.PrivateKey) > 0 {
 		priv, err = jwt.ParseECPrivateKeyFromPEM(opts.PrivateKey)
 		if err != nil {
@@ -174,6 +181,7 @@ func (opts *jwtOptions) ecKey() (interface{}, error) {
 		}
 	}
 
+    // 解析公钥
 	if len(opts.PublicKey) > 0 {
 		pub, err = jwt.ParseECPublicKeyFromPEM(opts.PublicKey)
 		if err != nil {
@@ -181,16 +189,19 @@ func (opts *jwtOptions) ecKey() (interface{}, error) {
 		}
 	}
 
+    // 看公钥是否可用
 	if priv == nil {
 		if pub == nil {
 			// Neither key given
 			return nil, ErrMissingKey
 		}
+
 		// Public key only, can verify tokens
 		return pub, nil
 	}
 
 	// both keys provided, make sure they match
+	// 校验私钥是否可用
 	if pub != nil && pub.Curve != priv.Curve &&
 		pub.X.Cmp(priv.X) != 0 && pub.Y.Cmp(priv.Y) != 0 {
 		return nil, ErrKeyMismatch

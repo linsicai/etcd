@@ -38,7 +38,9 @@ import (
 )
 
 var (
+    // 开启key
     enableFlagKey = []byte("authEnabled")
+    // 值
     authEnabled   = []byte{1}
     authDisabled  = []byte{0}
 
@@ -191,6 +193,7 @@ type AuthStore interface {
 type TokenProvider interface {
     info(ctx context.Context, token string, revision uint64) (*AuthInfo, bool)
     assign(ctx context.Context, username string, revision uint64) (string, error)
+
     enable()
     disable()
 
@@ -204,6 +207,7 @@ type authStore struct {
 
     lg        *zap.Logger
     be        backend.Backend
+
     enabled   bool
     enabledMu sync.RWMutex
 
@@ -213,10 +217,13 @@ type authStore struct {
     bcryptCost    int // the algorithm cost / strength for hashing auth passwords
 }
 
+// 开启
 func (as *authStore) AuthEnable() error {
     as.enabledMu.Lock()
     defer as.enabledMu.Unlock()
+
     if as.enabled {
+        // 已经开启
         if as.lg != nil {
             as.lg.Info("authentication is already enabled; ignored auth enable request")
         } else {
@@ -224,46 +231,60 @@ func (as *authStore) AuthEnable() error {
         }
         return nil
     }
+
+    // 开启事务，加锁
     b := as.be
     tx := b.BatchTx()
     tx.Lock()
     defer func() {
+        // 结束时强制提交
         tx.Unlock()
         b.ForceCommit()
     }()
 
+    // 找root 用户
     u := getUser(as.lg, tx, rootUser)
     if u == nil {
         return ErrRootUserNotExist
     }
 
+    // 校验是否有root 角色
     if !hasRootRole(u) {
         return ErrRootRoleNotExist
     }
 
+    // 落盘
     tx.UnsafePut(authBucketName, enableFlagKey, authEnabled)
 
+    // 开启，启动token
     as.enabled = true
     as.tokenProvider.enable()
 
+    // 设置权限缓存
     as.rangePermCache = make(map[string]*unifiedRangePermissions)
 
+    // 设置版本
     as.setRevision(getRevision(tx))
 
+    // 打印日志
     if as.lg != nil {
         as.lg.Info("enabled authentication")
     } else {
         plog.Noticef("Authentication enabled")
     }
+
     return nil
 }
 
 func (as *authStore) AuthDisable() {
+    // 加锁
     as.enabledMu.Lock()
     defer as.enabledMu.Unlock()
     if !as.enabled {
         return
     }
+
+    // 修改db
     b := as.be
     tx := b.BatchTx()
     tx.Lock()
@@ -272,9 +293,11 @@ func (as *authStore) AuthDisable() {
     tx.Unlock()
     b.ForceCommit()
 
+    // 关闭
     as.enabled = false
     as.tokenProvider.disable()
 
+    // 日志
     if as.lg != nil {
         as.lg.Info("disabled authentication")
     } else {
@@ -283,24 +306,30 @@ func (as *authStore) AuthDisable() {
 }
 
 func (as *authStore) Close() error {
+    // 加锁判断
     as.enabledMu.Lock()
     defer as.enabledMu.Unlock()
     if !as.enabled {
         return nil
     }
+
+    // 关闭token 管理类
     as.tokenProvider.disable()
     return nil
 }
 
 func (as *authStore) Authenticate(ctx context.Context, username, password string) (*pb.AuthenticateResponse, error) {
+    // 判断是否开启
     if !as.IsAuthEnabled() {
         return nil, ErrAuthNotEnabled
     }
 
+    // 创建读事务
     tx := as.be.BatchTx()
     tx.Lock()
     defer tx.Unlock()
 
+    // 找用户
     user := getUser(as.lg, tx, username)
     if user == nil {
         return nil, ErrAuthFailed
@@ -308,12 +337,13 @@ func (as *authStore) Authenticate(ctx context.Context, username, password string
 
     // Password checking is already performed in the API layer, so we don't need to check for now.
     // Staleness of password can be detected with OCC in the API layer, too.
-
+    // 获取token
     token, err := as.tokenProvider.assign(ctx, username, as.Revision())
     if err != nil {
         return nil, err
     }
 
+    // 打印日志
     if as.lg != nil {
         as.lg.Debug(
             "authenticated a user",
@@ -323,23 +353,30 @@ func (as *authStore) Authenticate(ctx context.Context, username, password string
     } else {
         plog.Debugf("authorized %s, token is %s", username, token)
     }
+
+    // 成功
     return &pb.AuthenticateResponse{Token: token}, nil
 }
 
+// 检验密码
 func (as *authStore) CheckPassword(username, password string) (uint64, error) {
+    // 判断是否开启
     if !as.IsAuthEnabled() {
         return 0, ErrAuthNotEnabled
     }
 
+    // 创建读事务
     tx := as.be.BatchTx()
     tx.Lock()
     defer tx.Unlock()
 
+    // 查找用户
     user := getUser(as.lg, tx, username)
     if user == nil {
         return 0, ErrAuthFailed
     }
 
+    // 校验密码
     if bcrypt.CompareHashAndPassword(user.Password, []byte(password)) != nil {
         if as.lg != nil {
             as.lg.Info("invalid password", zap.String("user-name", username))
@@ -348,14 +385,20 @@ func (as *authStore) CheckPassword(username, password string) (uint64, error) {
         }
         return 0, ErrAuthFailed
     }
+
     return getRevision(tx), nil
 }
 
+// 恢复
 func (as *authStore) Recover(be backend.Backend) {
+    // 默认关闭
     enabled := false
+
+    // 从db 读取开启开关
     as.be = be
     tx := be.BatchTx()
     tx.Lock()
+
     _, vs := tx.UnsafeRange(authBucketName, enableFlagKey, nil, 0)
     if len(vs) == 1 {
         if bytes.Equal(vs[0], authEnabled) {
@@ -367,12 +410,14 @@ func (as *authStore) Recover(be backend.Backend) {
 
     tx.Unlock()
 
+    // 加锁设置开启状态
     as.enabledMu.Lock()
     as.enabled = enabled
     as.enabledMu.Unlock()
 }
 
 func (as *authStore) UserAdd(r *pb.AuthUserAddRequest) (*pb.AuthUserAddResponse, error) {
+    // 校验用户名
     if len(r.Name) == 0 {
         return nil, ErrUserEmpty
     }
@@ -1362,11 +1407,14 @@ func (as *authStore) WithRoot(ctx context.Context) context.Context {
 
 func (as *authStore) HasRole(user, role string) bool {
     tx := as.be.BatchTx()
+
+    // 查找用户
     tx.Lock()
     u := getUser(as.lg, tx, user)
     tx.Unlock()
 
     if u == nil {
+        // 无此用户，打印告警信息
         if as.lg != nil {
             as.lg.Warn(
                 "'has-role' requested for non-existing user",
@@ -1379,11 +1427,13 @@ func (as *authStore) HasRole(user, role string) bool {
         return false
     }
 
+    // 遍历用户角色，查看是否有指定角色
     for _, r := range u.Roles {
         if role == r {
             return true
         }
     }
+
     return false
 }
 

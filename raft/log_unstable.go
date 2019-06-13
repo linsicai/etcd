@@ -36,6 +36,7 @@ func (u *unstable) maybeFirstIndex() (uint64, bool) {
 	if u.snapshot != nil {
 		return u.snapshot.Metadata.Index + 1, true
 	}
+
 	return 0, false
 }
 

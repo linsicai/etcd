@@ -68,6 +68,7 @@ func (ivl *Interval) Compare(c Comparable) int {
 // 范围节点
 type intervalNode struct {
 	// iv is the interval-value pair entry.
+	// 范围 and 值
 	iv IntervalValue
 
 	// max endpoint of all descendent nodes.
@@ -83,103 +84,138 @@ type intervalNode struct {
 	c      rbcolor
 }
 
+// 返回颜色，默认黑色
 func (x *intervalNode) color() rbcolor {
 	if x == nil {
 		return black
 	}
+
 	return x.c
 }
 
+// 树的高度
 func (x *intervalNode) height() int {
 	if x == nil {
 		return 0
 	}
+
+    // 左右子树的最大值 + 1
 	ld := x.left.height()
 	rd := x.right.height()
 	if ld < rd {
 		return rd + 1
 	}
+
 	return ld + 1
 }
 
+// 找最小节点
 func (x *intervalNode) min() *intervalNode {
 	for x.left != nil {
 		x = x.left
 	}
+
 	return x
 }
 
 // successor is the next in-order node in the tree
+// 找下一个值
 func (x *intervalNode) successor() *intervalNode {
 	if x.right != nil {
+	    // 如果有右子树，找右子树中的最小者
 		return x.right.min()
 	}
+
+    // 如果没有右子树
+    // 可能是左树的父节点
+    // 或者右树向上卷
 	y := x.parent
 	for y != nil && x == y.right {
 		x = y
 		y = y.parent
 	}
+
 	return y
 }
 
 // updateMax updates the maximum values for a node and its ancestors
 func (x *intervalNode) updateMax() {
 	for x != nil {
-		oldmax := x.max
-		max := x.iv.Ivl.End
+		oldmax := x.max // 老的最大值
+		max := x.iv.Ivl.End // 当前范围最大值
+
+        // 和左树比较
 		if x.left != nil && x.left.max.Compare(max) > 0 {
 			max = x.left.max
 		}
+
+        // 和右树比较
 		if x.right != nil && x.right.max.Compare(max) > 0 {
 			max = x.right.max
 		}
+
 		if oldmax.Compare(max) == 0 {
+		    // 最大值不变
 			break
 		}
+
+        // 更新最大值，向上修复
 		x.max = max
 		x = x.parent
 	}
 }
 
+// 节点访问函数
 type nodeVisitor func(n *intervalNode) bool
 
 // visit will call a node visitor on each node that overlaps the given interval
 func (x *intervalNode) visit(iv *Interval, nv nodeVisitor) bool {
 	if x == nil {
+	    // 空树
 		return true
 	}
+
 	v := iv.Compare(&x.iv.Ivl)
 	switch {
 	case v < 0:
+	    // 左边
 		if !x.left.visit(iv, nv) {
 			return false
 		}
 	case v > 0:
+	    // 更新最大值再比一次
 		maxiv := Interval{x.iv.Ivl.Begin, x.max}
 		if maxiv.Compare(iv) == 0 {
+		    // 左右子树找一找
 			if !x.left.visit(iv, nv) || !x.right.visit(iv, nv) {
 				return false
 			}
 		}
 	default:
+	    // 访问左，中，右，有一个错就是错
 		if !x.left.visit(iv, nv) || !nv(x) || !x.right.visit(iv, nv) {
 			return false
 		}
 	}
+
 	return true
 }
 
+// 范围 and 值
 type IntervalValue struct {
 	Ivl Interval
+
 	Val interface{}
 }
 
 // IntervalTree represents a (mostly) textbook implementation of the
 // "Introduction to Algorithms" (Cormen et al, 2nd ed.) chapter 13 red-black tree
 // and chapter 14.3 interval tree with search supporting "stabbing queries".
+// 范围树
 type IntervalTree struct {
-	root  *intervalNode
-	count int
+	root  *intervalNode // 根节点
+
+	count int // 数目
 }
 
 // Delete removes the node with the given interval from the tree, returning
@@ -187,6 +223,7 @@ type IntervalTree struct {
 func (ivt *IntervalTree) Delete(ivl Interval) bool {
 	z := ivt.find(ivl)
 	if z == nil {
+	    // 没找到
 		return false
 	}
 
@@ -513,6 +550,7 @@ func (s StringComparable) Compare(c Comparable) int {
 	if s > sc {
 		return 1
 	}
+
 	return 0
 }
 

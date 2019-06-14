@@ -29,11 +29,16 @@ import (
 
 var (
     gatewayListenAddr            string
+
     gatewayEndpoints             []string
+
     gatewayDNSCluster            string
     gatewayDNSClusterServiceName string
+
     gatewayInsecureDiscovery     bool
+
     getewayRetryDelay            time.Duration
+
     gatewayCA                    string
 )
 
@@ -92,6 +97,7 @@ func stripSchema(eps []string) []string {
 }
 
 func startGateway(cmd *cobra.Command, args []string) {
+    // 创建日志
     var lg *zap.Logger
     lg, err := zap.NewProduction()
     if err != nil {
@@ -99,6 +105,7 @@ func startGateway(cmd *cobra.Command, args []string) {
         os.Exit(1)
     }
 
+    // dns 查找后端
     srvs := discoverEndpoints(lg, gatewayDNSCluster, gatewayCA, gatewayInsecureDiscovery, gatewayDNSClusterServiceName)
     if len(srvs.Endpoints) == 0 {
         // no endpoints discovered, fall back to provided endpoints
@@ -120,11 +127,13 @@ func startGateway(cmd *cobra.Command, args []string) {
         }
     }
 
+    // 找后端失败
     if len(srvs.Endpoints) == 0 {
         fmt.Println("no endpoints found")
         os.Exit(1)
     }
 
+    // 起监听端口
     var l net.Listener
     l, err = net.Listen("tcp", gatewayListenAddr)
     if err != nil {
@@ -132,6 +141,7 @@ func startGateway(cmd *cobra.Command, args []string) {
         os.Exit(1)
     }
 
+    // 创建proxy
     tp := tcpproxy.TCPProxy{
         Logger:          lg,
         Listener:        l,

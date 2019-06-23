@@ -47,12 +47,12 @@ import (
 )
 
 type serveCtx struct {
-	lg       *zap.Logger
-	l        net.Listener
-	addr     string
-	network  string
-	secure   bool
-	insecure bool
+	lg       *zap.Logger // 日志
+	l        net.Listener // 监听用
+	addr     string // 地址
+	network  string // 网络类型
+	secure   bool // ？
+	insecure bool // ？
 
 	ctx    context.Context
 	cancel context.CancelFunc

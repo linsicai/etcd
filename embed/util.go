@@ -20,6 +20,7 @@ import (
 	"go.etcd.io/etcd/wal"
 )
 
+// 判定wal 目录是否存在
 func isMemberInitialized(cfg *Config) bool {
 	waldir := cfg.WalDir
 	if waldir == "" {

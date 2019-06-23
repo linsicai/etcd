@@ -24,6 +24,7 @@ import (
 	jwt "github.com/dgrijalva/jwt-go"
 )
 
+// NOTICE
 const (
 	optSignMethod = "sign-method" // 签名方法
 	optPublicKey  = "pub-key"     // 公钥
@@ -102,6 +103,7 @@ func (opts *jwtOptions) Parse(optMap map[string]string) error {
 }
 
 // Key will parse and return the appropriately typed key for the selected signature method
+// 返回签名后的key
 func (opts *jwtOptions) Key() (interface{}, error) {
 	switch opts.SignMethod.(type) {
 	case *jwt.SigningMethodRSA, *jwt.SigningMethodRSAPSS:

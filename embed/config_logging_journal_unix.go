@@ -31,5 +31,6 @@ func getJournalWriteSyncer() (zapcore.WriteSyncer, error) {
 	if err != nil {
 		return nil, fmt.Errorf("can't find journal (%v)", err)
 	}
+
 	return zapcore.AddSync(jw), nil
 }

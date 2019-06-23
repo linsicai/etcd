@@ -59,9 +59,11 @@ func startEtcdOrProxyV2() {
     cfg := newConfig()
     defaultInitialCluster := cfg.ec.InitialCluster
 
+    // 解析参数
     err := cfg.parse(os.Args[1:])
     lg := cfg.ec.GetLogger()
     if err != nil {
+        // 解析参数出错
         if lg != nil {
             lg.Warn("failed to verify flags", zap.Error(err))
         } else {
@@ -78,6 +80,7 @@ func startEtcdOrProxyV2() {
         os.Exit(1)
     }
 
+    // 打印基本信息
     if lg == nil {
         // TODO: remove in 3.5
         plog.Infof("etcd Version: %s\n", version.Version)
@@ -87,6 +90,7 @@ func startEtcdOrProxyV2() {
         plog.Infof("setting maximum number of CPUs to %d, total number of available CPUs is %d", runtime.GOMAXPROCS(0), runtime.NumCPU())
     }
 
+    // 退出时，日志刷盘
     defer func() {
         logger := cfg.ec.GetLogger()
         if logger != nil {
@@ -94,6 +98,7 @@ func startEtcdOrProxyV2() {
         }
     }()
 
+    // 更新集群信息
     defaultHost, dhErr := (&cfg.ec).UpdateDefaultClusterFromName(defaultInitialCluster)
     if defaultHost != "" {
         if lg != nil {
@@ -113,6 +118,7 @@ func startEtcdOrProxyV2() {
         }
     }
 
+    // 设置数据路径
     if cfg.ec.Dir == "" {
         cfg.ec.Dir = fmt.Sprintf("%v.etcd", cfg.ec.Name)
         if lg != nil {
@@ -128,8 +134,10 @@ func startEtcdOrProxyV2() {
     var stopped <-chan struct{}
     var errc <-chan error
 
+    // 校验数据目录
     which := identifyDataDirOrDie(cfg.ec.GetLogger(), cfg.ec.Dir)
     if which != dirEmpty {
+        // 已初始化过
         if lg != nil {
             lg.Info(
                 "server has been already initialized",
@@ -139,12 +147,15 @@ func startEtcdOrProxyV2() {
         } else {
             plog.Noticef("the server is already initialized as %v before, starting as etcd %v...", which, which)
         }
+
+        // 按路径启动不同服务
         switch which {
         case dirMember:
             stopped, errc, err = startEtcd(&cfg.ec)
         case dirProxy:
             err = startProxy(cfg)
         default:
+            // 出错
             if lg != nil {
                 lg.Panic(
                     "unknown directory type",
@@ -157,6 +168,7 @@ func startEtcdOrProxyV2() {
     } else {
         shouldProxy := cfg.isProxy()
         if !shouldProxy {
+            // 启动etcd
             stopped, errc, err = startEtcd(&cfg.ec)
             if derr, ok := err.(*etcdserver.DiscoveryError); ok && derr.Err == v2discovery.ErrFullCluster {
                 if cfg.shouldFallbackToProxy() {
@@ -177,11 +189,14 @@ func startEtcdOrProxyV2() {
                 }
             }
         }
+
+        // 启动代理
         if shouldProxy {
             err = startProxy(cfg)
         }
     }
 
+    // 出错，答应详情
     if err != nil {
         if derr, ok := err.(*etcdserver.DiscoveryError); ok {
             switch derr.Err {
@@ -274,6 +289,7 @@ func startEtcdOrProxyV2() {
         }
     }
 
+    // 处理信号错误
     osutil.HandleInterrupts(lg)
 
     // At this point, the initialization of etcd is done.
@@ -286,33 +302,43 @@ func startEtcdOrProxyV2() {
     select {
     case lerr := <-errc:
         // fatal out on listener errors
+        // 出错了
         if lg != nil {
             lg.Fatal("listener failed", zap.Error(err))
         } else {
             plog.Fatal(lerr)
         }
     case <-stopped:
+        // 停止
     }
 
+    // 结束
     osutil.Exit(0)
 }
 
 // startEtcd runs StartEtcd in addition to hooks needed for standalone etcd.
 func startEtcd(cfg *embed.Config) (<-chan struct{}, <-chan error, error) {
+    // 启动
     e, err := embed.StartEtcd(cfg)
     if err != nil {
         return nil, nil, err
     }
+
     osutil.RegisterInterruptHandler(e.Close)
+
+    // 等待处理结果
     select {
     case <-e.Server.ReadyNotify(): // wait for e.Server to join the cluster
     case <-e.Server.StopNotify(): // publish aborted from 'ErrStopped'
     }
+
+    // ???
     return e.Server.StopNotify(), e.Err(), nil
 }
 
 // startProxy launches an HTTP proxy for client communication which proxies to other etcd nodes.
 func startProxy(cfg *config) error {
+    // 开始
     lg := cfg.ec.GetLogger()
     if lg != nil {
         lg.Info("v2 API proxy starting")
@@ -320,6 +346,7 @@ func startProxy(cfg *config) error {
         plog.Notice("proxy: this proxy supports v2 API only!")
     }
 
+    // 安全验证
     clientTLSInfo := cfg.ec.ClientTLSInfo
     if clientTLSInfo.Empty() {
         // Support old proxy behavior of defaulting to PeerTLSInfo
@@ -340,6 +367,7 @@ func startProxy(cfg *config) error {
     }
     pt.MaxIdleConnsPerHost = httpproxy.DefaultMaxIdleConnsPerHost
 
+    // 取证书？
     if err = cfg.ec.PeerSelfCert(); err != nil {
         if lg != nil {
             lg.Fatal("failed to get self-signed certs for peer", zap.Error(err))
@@ -357,6 +385,7 @@ func startProxy(cfg *config) error {
         return err
     }
 
+    // 创建路径
     cfg.ec.Dir = filepath.Join(cfg.ec.Dir, "proxy")
     err = os.MkdirAll(cfg.ec.Dir, fileutil.PrivateDirMode)
     if err != nil {
@@ -366,6 +395,7 @@ func startProxy(cfg *config) error {
     var peerURLs []string
     clusterfile := filepath.Join(cfg.ec.Dir, "cluster")
 
+    // 读取集群文件
     b, err := ioutil.ReadFile(clusterfile)
     switch {
     case err == nil:
@@ -553,6 +583,7 @@ func startProxy(cfg *config) error {
 // identifyDataDirOrDie returns the type of the data dir.
 // Dies if the datadir is invalid.
 func identifyDataDirOrDie(lg *zap.Logger, dir string) dirType {
+    // 读取dir
     names, err := fileutil.ReadDir(dir)
     if err != nil {
         if os.IsNotExist(err) {
@@ -565,6 +596,7 @@ func identifyDataDirOrDie(lg *zap.Logger, dir string) dirType {
         }
     }
 
+    // 看目录
     var m, p bool
     for _, name := range names {
         switch dirType(name) {
@@ -585,6 +617,7 @@ func identifyDataDirOrDie(lg *zap.Logger, dir string) dirType {
         }
     }
 
+    // 错误
     if m && p {
         if lg != nil {
             lg.Fatal("invalid datadir; both member and proxy directories exist")
@@ -592,6 +625,8 @@ func identifyDataDirOrDie(lg *zap.Logger, dir string) dirType {
             plog.Fatal("invalid datadir. Both member and proxy directories exist.")
         }
     }
+
+    // 判断类型
     if m {
         return dirMember
     }

@@ -31,6 +31,7 @@ type tokenJWT struct {
     signMethod jwt.SigningMethod // 签名方法
     key        interface{} // key
     ttl        time.Duration // ttl
+
     verifyOnly bool // 仅验证
 }
 

@@ -29,6 +29,7 @@ func Main() {
     checkSupportArch()
 
     if len(os.Args) > 1 {
+        // 取参数
         cmd := os.Args[1]
 
         // cov
@@ -40,6 +41,7 @@ func Main() {
 
         switch cmd {
         case "gateway", "grpc-proxy":
+            // 网管 或 代理
             if err := rootCmd.Execute(); err != nil {
                 fmt.Fprint(os.Stderr, err)
                 os.Exit(1)
@@ -48,20 +50,23 @@ func Main() {
         }
     }
 
+    // 启动服务
     startEtcdOrProxyV2()
 }
 
 func notifySystemd(lg *zap.Logger) {
-    // 看是否在执行
+    // 看是否是systemd 起来的
     if !systemdutil.IsRunningSystemd() {
         return
     }
-
     if lg != nil {
         lg.Info("host was booted with systemd, sends READY=1 message to init daemon")
     }
+
+    // 唤醒
     sent, err := daemon.SdNotify(false, "READY=1")
     if err != nil {
+        // 出错
         if lg != nil {
             lg.Error("failed to notify systemd for readiness", zap.Error(err))
         } else {
@@ -69,6 +74,7 @@ func notifySystemd(lg *zap.Logger) {
         }
     }
 
+    // 失败
     if !sent {
         if lg != nil {
             lg.Warn("forgot to set Type=notify in systemd service file?")

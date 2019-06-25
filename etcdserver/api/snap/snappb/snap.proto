@@ -8,6 +8,7 @@ option (gogoproto.sizer_all) = true;
 option (gogoproto.unmarshaler_all) = true;
 option (gogoproto.goproto_getters_all) = false;
 
+// 快照：crc + 字节
 message snapshot {
 	optional uint32 crc  = 1 [(gogoproto.nullable) = false];
 	optional bytes data  = 2;

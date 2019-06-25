@@ -29,11 +29,13 @@ import (
 // copying the entire snapshot into a byte array, which consumes a lot of memory.
 //
 // User of Message should close the Message after sending it.
+// 快照消息
 type Message struct {
 	raftpb.Message
-	ReadCloser io.ReadCloser
-	TotalSize  int64
-	closeC     chan bool
+
+	ReadCloser io.ReadCloser // 读取器
+	TotalSize  int64 // 消息大小
+	closeC     chan bool // 结束通道
 }
 
 func NewMessage(rs raftpb.Message, rc io.ReadCloser, rcSize int64) *Message {
@@ -48,14 +50,17 @@ func NewMessage(rs raftpb.Message, rc io.ReadCloser, rcSize int64) *Message {
 // CloseNotify returns a channel that receives a single value
 // when the message sent is finished. true indicates the sent
 // is successful.
+// 
 func (m Message) CloseNotify() <-chan bool {
 	return m.closeC
 }
 
+// 关闭文件，通知结束，优先使用关闭时的错误
 func (m Message) CloseWithError(err error) {
 	if cerr := m.ReadCloser.Close(); cerr != nil {
 		err = cerr
 	}
+
 	if err == nil {
 		m.closeC <- true
 	} else {

@@ -38,8 +38,13 @@ var (
 )
 
 const (
+    // 配置
 	configPath  = "/config"
+
+    // 系统参数
 	varsPath    = "/debug/vars"
+
+    // 版本
 	versionPath = "/version"
 )
 
@@ -55,6 +60,7 @@ func HandleBasic(mux *http.ServeMux, server etcdserver.ServerPeer) {
 	mux.HandleFunc(versionPath, versionHandler(server.Cluster(), serveVersion))
 }
 
+// 版本包
 func versionHandler(c api.Cluster, fn func(http.ResponseWriter, *http.Request, string)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		v := c.Version()

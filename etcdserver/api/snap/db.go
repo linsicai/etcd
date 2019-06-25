@@ -29,6 +29,7 @@ import (
 	"go.uber.org/zap"
 )
 
+// 错误
 var ErrNoDBSnapshot = errors.New("snap: snapshot file doesn't exist")
 
 // SaveDBFrom saves snapshot of the database from the given reader. It
@@ -36,10 +37,13 @@ var ErrNoDBSnapshot = errors.New("snap: snapshot file doesn't exist")
 func (s *Snapshotter) SaveDBFrom(r io.Reader, id uint64) (int64, error) {
 	start := time.Now()
 
+    // 创建临时文件
 	f, err := ioutil.TempFile(s.dir, "tmp")
 	if err != nil {
 		return 0, err
 	}
+
+    // 写文件，观察耗时
 	var n int64
 	n, err = io.Copy(f, r)
 	if err == nil {
@@ -48,21 +52,27 @@ func (s *Snapshotter) SaveDBFrom(r io.Reader, id uint64) (int64, error) {
 		snapDBFsyncSec.Observe(time.Since(fsyncStart).Seconds())
 	}
 	f.Close()
+    // 写失败删除临时文件
 	if err != nil {
 		os.Remove(f.Name())
 		return n, err
 	}
+
+    // 已经存在？
 	fn := s.dbFilePath(id)
 	if fileutil.Exist(fn) {
 		os.Remove(f.Name())
 		return n, nil
 	}
+
+    // 临时文件转正
 	err = os.Rename(f.Name(), fn)
 	if err != nil {
 		os.Remove(f.Name())
 		return n, err
 	}
 
+    // 日志
 	if s.lg != nil {
 		s.lg.Info(
 			"saved database snapshot to disk",
@@ -74,6 +84,7 @@ func (s *Snapshotter) SaveDBFrom(r io.Reader, id uint64) (int64, error) {
 		plog.Infof("saved database snapshot to disk [total bytes: %d]", n)
 	}
 
+    // 监控耗时
 	snapDBSaveSec.Observe(time.Since(start).Seconds())
 	return n, nil
 }
@@ -81,13 +92,18 @@ func (s *Snapshotter) SaveDBFrom(r io.Reader, id uint64) (int64, error) {
 // DBFilePath returns the file path for the snapshot of the database with
 // given id. If the snapshot does not exist, it returns error.
 func (s *Snapshotter) DBFilePath(id uint64) (string, error) {
+    // 读取目录
 	if _, err := fileutil.ReadDir(s.dir); err != nil {
 		return "", err
 	}
+
+    // 校验文件名
 	fn := s.dbFilePath(id)
 	if fileutil.Exist(fn) {
 		return fn, nil
 	}
+
+    // 错误日志
 	if s.lg != nil {
 		s.lg.Warn(
 			"failed to find [SNAPSHOT-INDEX].snap.db",

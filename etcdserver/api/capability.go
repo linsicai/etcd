@@ -24,17 +24,24 @@ import (
 	"github.com/coreos/pkg/capnslog"
 )
 
+// 能力
 type Capability string
 
+// 能力枚举
 const (
+    // 权限管理
 	AuthCapability  Capability = "auth"
+
+    // v3 rpc
 	V3rpcCapability Capability = "v3rpc"
 )
 
 var (
+    // 日志模块
 	plog = capnslog.NewPackageLogger("go.etcd.io/etcd", "etcdserver/api")
 
 	// capabilityMaps is a static map of version to capability map.
+	// 版本能力映射表
 	capabilityMaps = map[string]map[Capability]bool{
 		"3.0.0": {AuthCapability: true, V3rpcCapability: true},
 		"3.1.0": {AuthCapability: true, V3rpcCapability: true},
@@ -42,13 +49,16 @@ var (
 		"3.3.0": {AuthCapability: true, V3rpcCapability: true},
 	}
 
+    // 能力管理
 	enableMapMu sync.RWMutex
 	// enabledMap points to a map in capabilityMaps
 	enabledMap map[Capability]bool
 
+    // 版本
 	curVersion *semver.Version
 )
 
+// 初始化
 func init() {
 	enabledMap = map[Capability]bool{
 		AuthCapability:  true,
@@ -57,20 +67,26 @@ func init() {
 }
 
 // UpdateCapability updates the enabledMap when the cluster version increases.
+// 更新能力
 func UpdateCapability(lg *zap.Logger, v *semver.Version) {
 	if v == nil {
 		// if recovered but version was never set by cluster
 		return
 	}
+
 	enableMapMu.Lock()
 	if curVersion != nil && !curVersion.LessThan(*v) {
+	    // 过期数据，忽略它
 		enableMapMu.Unlock()
 		return
 	}
+
+    // 更新版本与能力映射表
 	curVersion = v
 	enabledMap = capabilityMaps[curVersion.String()]
 	enableMapMu.Unlock()
 
+    // 打印日志
 	if lg != nil {
 		lg.Info(
 			"enabled capabilities for version",
@@ -81,6 +97,7 @@ func UpdateCapability(lg *zap.Logger, v *semver.Version) {
 	}
 }
 
+// 是否有指定能力
 func IsCapabilityEnabled(c Capability) bool {
 	enableMapMu.RLock()
 	defer enableMapMu.RUnlock()
@@ -90,6 +107,7 @@ func IsCapabilityEnabled(c Capability) bool {
 	return enabledMap[c]
 }
 
+// 开启制定能力
 func EnableCapability(c Capability) {
 	enableMapMu.Lock()
 	defer enableMapMu.Unlock()

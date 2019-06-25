@@ -17,6 +17,7 @@ package snap
 import "github.com/prometheus/client_golang/prometheus"
 
 var (
+    // 序列化
 	snapMarshallingSec = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Namespace: "etcd_debugging",
 		Subsystem: "snap",
@@ -28,6 +29,7 @@ var (
 		Buckets: prometheus.ExponentialBuckets(0.001, 2, 14),
 	})
 
+    // 保存
 	snapSaveSec = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Namespace: "etcd_debugging",
 		Subsystem: "snap",
@@ -39,6 +41,7 @@ var (
 		Buckets: prometheus.ExponentialBuckets(0.001, 2, 14),
 	})
 
+    // 同步
 	snapFsyncSec = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Namespace: "etcd",
 		Subsystem: "snap",
@@ -50,6 +53,7 @@ var (
 		Buckets: prometheus.ExponentialBuckets(0.001, 2, 14),
 	})
 
+    // 保存数据库
 	snapDBSaveSec = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Namespace: "etcd",
 		Subsystem: "snap_db",
@@ -61,6 +65,7 @@ var (
 		Buckets: prometheus.ExponentialBuckets(0.1, 2, 10),
 	})
 
+    // 数据库同步
 	snapDBFsyncSec = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Namespace: "etcd",
 		Subsystem: "snap_db",
@@ -73,6 +78,7 @@ var (
 	})
 )
 
+// 注册指标
 func init() {
 	prometheus.MustRegister(snapMarshallingSec)
 	prometheus.MustRegister(snapSaveSec)

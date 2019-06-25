@@ -22,17 +22,26 @@ import (
 )
 
 // Cluster is an interface representing a collection of members in one etcd cluster.
+// 集群接口
 type Cluster interface {
-	// ID returns the cluster ID
+	// ID returns the cluster ID，集群ID
 	ID() types.ID
+
 	// ClientURLs returns an aggregate set of all URLs on which this
 	// cluster is listening for client requests
+	// 客户端url 列表
 	ClientURLs() []string
+
 	// Members returns a slice of members sorted by their ID
+	// 成员列表
 	Members() []*membership.Member
+
 	// Member retrieves a particular member based on ID, or nil if the
 	// member does not exist in the cluster
+	// 找成员
 	Member(id types.ID) *membership.Member
+
 	// Version is the cluster-wide minimum major.minor version.
+	// 版本号
 	Version() *semver.Version
 }

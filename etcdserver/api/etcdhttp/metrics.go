@@ -47,23 +47,32 @@ func HandlePrometheus(mux *http.ServeMux) {
 // NewHealthHandler handles '/health' requests.
 func NewHealthHandler(hfunc func() Health) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+	    // 方法校验
 		if r.Method != http.MethodGet {
 			w.Header().Set("Allow", http.MethodGet)
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 			return
 		}
+
+		// 运行函数
 		h := hfunc()
+
+        // 序列化
 		d, _ := json.Marshal(h)
 		if h.Health != "true" {
+		    // 告警
 			http.Error(w, string(d), http.StatusServiceUnavailable)
 			return
 		}
+
+        // 回包
 		w.WriteHeader(http.StatusOK)
 		w.Write(d)
 	}
 }
 
 var (
+    // 健康度统计
 	healthSuccess = prometheus.NewCounter(prometheus.CounterOpts{
 		Namespace: "etcd",
 		Subsystem: "server",
@@ -92,20 +101,24 @@ type Health struct {
 // TODO: server NOSPACE, etcdserver.ErrNoLeader in health API
 
 func checkHealth(srv etcdserver.ServerV2) Health {
+    // 默认健康
 	h := Health{Health: "true"}
 
+    // 有告警，不健康
 	as := srv.Alarms()
 	if len(as) > 0 {
 		h.Health = "false"
 	}
 
 	if h.Health == "true" {
+	    // 没有领导者，不健康
 		if uint64(srv.Leader()) == raft.None {
 			h.Health = "false"
 		}
 	}
 
 	if h.Health == "true" {
+	    // http 校验
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		_, err := srv.Do(ctx, etcdserverpb.Request{Method: "QGET"})
 		cancel()
@@ -114,6 +127,7 @@ func checkHealth(srv etcdserver.ServerV2) Health {
 		}
 	}
 
+	// 统计打点
 	if h.Health == "true" {
 		healthSuccess.Inc()
 	} else {

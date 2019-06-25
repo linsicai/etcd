@@ -38,32 +38,38 @@ var (
 )
 
 const (
-    // 配置
-	configPath  = "/config"
+	// 配置
+	configPath = "/config"
 
-    // 系统参数
-	varsPath    = "/debug/vars"
+	// 系统参数
+	varsPath = "/debug/vars"
 
-    // 版本
+	// 版本
 	versionPath = "/version"
 )
 
 // HandleBasic adds handlers to a mux for serving JSON etcd client requests
 // that do not access the v2 store.
 func HandleBasic(mux *http.ServeMux, server etcdserver.ServerPeer) {
+	// expvar 系统指标
 	mux.HandleFunc(varsPath, serveVars)
 
 	// TODO: deprecate '/config/local/log' in v3.5
+	// 设置日志等级
 	mux.HandleFunc(configPath+"/local/log", logHandleFunc)
 
 	HandleMetricsHealth(mux, server)
+
+	// 获取版本号
 	mux.HandleFunc(versionPath, versionHandler(server.Cluster(), serveVersion))
 }
 
-// 版本包
+// 版本号处理器
 func versionHandler(c api.Cluster, fn func(http.ResponseWriter, *http.Request, string)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// 获取集群版本
 		v := c.Version()
+
 		if v != nil {
 			fn(w, r, v.String())
 		} else {
@@ -72,15 +78,20 @@ func versionHandler(c api.Cluster, fn func(http.ResponseWriter, *http.Request, s
 	}
 }
 
+// 版本号处理函数
 func serveVersion(w http.ResponseWriter, r *http.Request, clusterV string) {
+	// 方法校验
 	if !allowMethod(w, r, "GET") {
 		return
 	}
+
+	// 基础信息
 	vs := version.Versions{
-		Server:  version.Version,
-		Cluster: clusterV,
+		Server:  version.Version, // etcd 版本
+		Cluster: clusterV,        // 集群版本
 	}
 
+	// 序列化
 	w.Header().Set("Content-Type", "application/json")
 	b, err := json.Marshal(&vs)
 	if err != nil {
@@ -91,30 +102,40 @@ func serveVersion(w http.ResponseWriter, r *http.Request, clusterV string) {
 
 // TODO: deprecate '/config/local/log' in v3.5
 func logHandleFunc(w http.ResponseWriter, r *http.Request) {
+	// 校验方法
 	if !allowMethod(w, r, "PUT") {
 		return
 	}
 
-	in := struct{ Level string }{}
+	// 日志等级
+	in := struct {
+		Level string
+	}{}
 
+	// json 解析
 	d := json.NewDecoder(r.Body)
 	if err := d.Decode(&in); err != nil {
 		WriteError(nil, w, r, httptypes.NewHTTPError(http.StatusBadRequest, "Invalid json body"))
 		return
 	}
 
+	// 解析日志等级
 	logl, err := capnslog.ParseLevel(strings.ToUpper(in.Level))
 	if err != nil {
 		WriteError(nil, w, r, httptypes.NewHTTPError(http.StatusBadRequest, "Invalid log level "+in.Level))
 		return
 	}
 
+	// 设置日志等级
 	plog.Noticef("globalLogLevel set to %q", logl.String())
 	capnslog.SetGlobalLogLevel(logl)
+
+	// 回空包
 	w.WriteHeader(http.StatusNoContent)
 }
 
 func serveVars(w http.ResponseWriter, r *http.Request) {
+	// 校验方法
 	if !allowMethod(w, r, "GET") {
 		return
 	}
@@ -132,6 +153,7 @@ func serveVars(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "\n}\n")
 }
 
+// 校验方法
 func allowMethod(w http.ResponseWriter, r *http.Request, m string) bool {
 	if m == r.Method {
 		return true
@@ -146,13 +168,16 @@ func allowMethod(w http.ResponseWriter, r *http.Request, m string) bool {
 // Otherwise, it is assumed to be a StatusInternalServerError
 func WriteError(lg *zap.Logger, w http.ResponseWriter, r *http.Request, err error) {
 	if err == nil {
-		return
+		return // 成功
 	}
+
 	switch e := err.(type) {
 	case *v2error.Error:
+		// v2 错误
 		e.WriteTo(w)
 
 	case *httptypes.HTTPError:
+		// http 错误
 		if et := e.WriteTo(w); et != nil {
 			if lg != nil {
 				lg.Debug(
@@ -167,9 +192,11 @@ func WriteError(lg *zap.Logger, w http.ResponseWriter, r *http.Request, err erro
 		}
 
 	default:
+		// 打日志
 		switch err {
 		case etcdserver.ErrTimeoutDueToLeaderFail, etcdserver.ErrTimeoutDueToConnectionLost, etcdserver.ErrNotEnoughStartedMembers,
 			etcdserver.ErrUnhealthy:
+			// etcd 服务通用错误
 			if lg != nil {
 				lg.Warn(
 					"v2 response error",
@@ -181,6 +208,7 @@ func WriteError(lg *zap.Logger, w http.ResponseWriter, r *http.Request, err erro
 			}
 
 		default:
+			// 默认错误
 			if lg != nil {
 				lg.Warn(
 					"unexpected v2 response error",
@@ -192,6 +220,7 @@ func WriteError(lg *zap.Logger, w http.ResponseWriter, r *http.Request, err erro
 			}
 		}
 
+		// 回系统错误
 		herr := httptypes.NewHTTPError(http.StatusInternalServerError, "Internal Server Error")
 		if et := herr.WriteTo(w); et != nil {
 			if lg != nil {

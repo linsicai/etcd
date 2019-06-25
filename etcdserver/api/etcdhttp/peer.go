@@ -36,21 +36,24 @@ func NewPeerHandler(lg *zap.Logger, s etcdserver.ServerPeer) http.Handler {
 }
 
 func newPeerHandler(lg *zap.Logger, cluster api.Cluster, raftHandler http.Handler, leaseHandler http.Handler) http.Handler {
+
+	// 成员处理器
 	mh := &peerMembersHandler{
 		lg:      lg,
 		cluster: cluster,
 	}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", http.NotFound)
-	mux.Handle(rafthttp.RaftPrefix, raftHandler)
-	mux.Handle(rafthttp.RaftPrefix+"/", raftHandler)
-	mux.Handle(peerMembersPrefix, mh)
+	mux.HandleFunc("/", http.NotFound)               // 404
+	mux.Handle(rafthttp.RaftPrefix, raftHandler)     // raft
+	mux.Handle(rafthttp.RaftPrefix+"/", raftHandler) // raft
+	mux.Handle(peerMembersPrefix, mh)                // 成员处理
 	if leaseHandler != nil {
+		// 租约处理器
 		mux.Handle(leasehttp.LeasePrefix, leaseHandler)
 		mux.Handle(leasehttp.LeaseInternalPrefix, leaseHandler)
 	}
-	mux.HandleFunc(versionPath, versionHandler(cluster, serveVersion))
+	mux.HandleFunc(versionPath, versionHandler(cluster, serveVersion)) // 版本
 	return mux
 }
 
@@ -60,15 +63,21 @@ type peerMembersHandler struct {
 }
 
 func (h *peerMembersHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// 方法校验
 	if !allowMethod(w, r, "GET") {
 		return
 	}
+
+	// 设置集群ID
 	w.Header().Set("X-Etcd-Cluster-ID", h.cluster.ID().String())
 
-	if r.URL.Path != peerMembersPrefix {
-		http.Error(w, "bad path", http.StatusBadRequest)
+	// 路径校验
+	if r.UR.Path != peerMembersPrefix {
+		http.Eror(w, "bad path", http.StatusBadRequest)
 		return
 	}
+
+	// 写成员列表
 	ms := h.cluster.Members()
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(ms); err != nil {

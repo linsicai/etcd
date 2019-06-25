@@ -29,15 +29,15 @@ type Capability string
 
 // 能力枚举
 const (
-    // 权限管理
-	AuthCapability  Capability = "auth"
+	// 权限管理
+	AuthCapability Capability = "auth"
 
-    // v3 rpc
+	// v3 rpc
 	V3rpcCapability Capability = "v3rpc"
 )
 
 var (
-    // 日志模块
+	// 日志模块
 	plog = capnslog.NewPackageLogger("go.etcd.io/etcd", "etcdserver/api")
 
 	// capabilityMaps is a static map of version to capability map.
@@ -49,12 +49,12 @@ var (
 		"3.3.0": {AuthCapability: true, V3rpcCapability: true},
 	}
 
-    // 能力管理
+	// 能力管理
 	enableMapMu sync.RWMutex
 	// enabledMap points to a map in capabilityMaps
 	enabledMap map[Capability]bool
 
-    // 版本
+	// 版本
 	curVersion *semver.Version
 )
 
@@ -76,17 +76,17 @@ func UpdateCapability(lg *zap.Logger, v *semver.Version) {
 
 	enableMapMu.Lock()
 	if curVersion != nil && !curVersion.LessThan(*v) {
-	    // 过期数据，忽略它
+		// 过期数据，忽略它
 		enableMapMu.Unlock()
 		return
 	}
 
-    // 更新版本与能力映射表
+	// 更新版本与能力映射表
 	curVersion = v
 	enabledMap = capabilityMaps[curVersion.String()]
 	enableMapMu.Unlock()
 
-    // 打印日志
+	// 打印日志
 	if lg != nil {
 		lg.Info(
 			"enabled capabilities for version",

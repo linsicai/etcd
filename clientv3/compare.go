@@ -18,9 +18,13 @@ import (
 	pb "go.etcd.io/etcd/etcdserver/etcdserverpb"
 )
 
+// 比较目标
 type CompareTarget int
+
+// 比较结果
 type CompareResult int
 
+// 版本、创建时间、修改时间、值
 const (
 	CompareVersion CompareTarget = iota
 	CompareCreated
@@ -28,11 +32,13 @@ const (
 	CompareValue
 )
 
+// 可比较类型
 type Cmp pb.Compare
 
 func Compare(cmp Cmp, result string, v interface{}) Cmp {
 	var r pb.Compare_CompareResult
 
+    // 设置比较结果
 	switch result {
 	case "=":
 		r = pb.Compare_EQUAL
@@ -45,8 +51,9 @@ func Compare(cmp Cmp, result string, v interface{}) Cmp {
 	default:
 		panic("Unknown result op")
 	}
-
 	cmp.Result = r
+
+    // 根据目标类型，设置值
 	switch cmp.Target {
 	case pb.Compare_VALUE:
 		val, ok := v.(string)
@@ -101,11 +108,14 @@ func (cmp *Cmp) ValueBytes() []byte {
 	if tu, ok := cmp.TargetUnion.(*pb.Compare_Value); ok {
 		return tu.Value
 	}
+
 	return nil
 }
 
 // WithValueBytes sets the byte slice for the comparison's value.
-func (cmp *Cmp) WithValueBytes(v []byte) { cmp.TargetUnion.(*pb.Compare_Value).Value = v }
+func (cmp *Cmp) WithValueBytes(v []byte) {
+    cmp.TargetUnion.(*pb.Compare_Value).Value = v
+}
 
 // WithRange sets the comparison to scan the range [key, end).
 func (cmp Cmp) WithRange(end string) Cmp {
@@ -127,14 +137,17 @@ func mustInt64(val interface{}) int64 {
 	if v, ok := val.(int); ok {
 		return int64(v)
 	}
+
 	panic("bad value")
 }
 
 // mustInt64orLeaseID panics if val isn't a LeaseID, int or int64. It returns an
 // int64 otherwise.
 func mustInt64orLeaseID(val interface{}) int64 {
+    // 转租约ID
 	if v, ok := val.(LeaseID); ok {
 		return int64(v)
 	}
+
 	return mustInt64(val)
 }

@@ -23,18 +23,22 @@ import (
 )
 
 type (
+    // 压缩结果
 	CompactResponse pb.CompactionResponse
+
 	PutResponse     pb.PutResponse
 	GetResponse     pb.RangeResponse
 	DeleteResponse  pb.DeleteRangeResponse
 	TxnResponse     pb.TxnResponse
 )
 
+// kv api
 type KV interface {
 	// Put puts a key-value pair into etcd.
 	// Note that key,value can be plain bytes array and string is
 	// an immutable representation of that bytes array.
 	// To get a string of bytes, do string([]byte{0x10, 0x20}).
+	// 设置
 	Put(ctx context.Context, key, val string, opts ...OpOption) (*PutResponse, error)
 
 	// Get retrieves keys.
@@ -45,12 +49,15 @@ type KV interface {
 	// if the required revision is compacted, the request will fail with ErrCompacted .
 	// When passed WithLimit(limit), the number of returned keys is bounded by limit.
 	// When passed WithSort(), the keys will be sorted.
+	// 获取
 	Get(ctx context.Context, key string, opts ...OpOption) (*GetResponse, error)
 
 	// Delete deletes a key, or optionally using WithRange(end), [key, end).
+	// 删除
 	Delete(ctx context.Context, key string, opts ...OpOption) (*DeleteResponse, error)
 
 	// Compact compacts etcd KV history before the given rev.
+	// 压缩
 	Compact(ctx context.Context, rev int64, opts ...CompactOption) (*CompactResponse, error)
 
 	// Do applies a single Op on KV without a transaction.
@@ -58,12 +65,15 @@ type KV interface {
 	// later time; the user can range over the operations, calling Do to
 	// execute them. Get/Put/Delete, on the other hand, are best suited
 	// for when the operation should be issued at the time of declaration.
+	// 操作
 	Do(ctx context.Context, op Op) (OpResponse, error)
 
 	// Txn creates a transaction.
+	// 事务
 	Txn(ctx context.Context) Txn
 }
 
+// 操作结果
 type OpResponse struct {
 	put *PutResponse
 	get *GetResponse
@@ -71,11 +81,11 @@ type OpResponse struct {
 	txn *TxnResponse
 }
 
+// 类型转换
 func (op OpResponse) Put() *PutResponse    { return op.put }
 func (op OpResponse) Get() *GetResponse    { return op.get }
 func (op OpResponse) Del() *DeleteResponse { return op.del }
 func (op OpResponse) Txn() *TxnResponse    { return op.txn }
-
 func (resp *PutResponse) OpResponse() OpResponse {
 	return OpResponse{put: resp}
 }
@@ -89,9 +99,11 @@ func (resp *TxnResponse) OpResponse() OpResponse {
 	return OpResponse{txn: resp}
 }
 
+// kv api
 type kv struct {
-	remote   pb.KVClient
-	callOpts []grpc.CallOption
+	remote   pb.KVClient // 客户端
+
+	callOpts []grpc.CallOption // 选项
 }
 
 func NewKV(c *Client) KV {

@@ -24,10 +24,11 @@ import (
 )
 
 var (
-	lgMu sync.RWMutex
-	lg   logutil.Logger
+	lgMu sync.RWMutex // 日志锁
+	lg   logutil.Logger // 日志
 )
 
+// 可设置的日志
 type settableLogger struct {
 	l  grpclog.LoggerV2
 	mu sync.RWMutex
@@ -35,6 +36,7 @@ type settableLogger struct {
 
 func init() {
 	// disable client side logs by default
+	// 关闭客户端日志
 	lg = &settableLogger{}
 	SetLogger(grpclog.NewLoggerV2(ioutil.Discard, ioutil.Discard, ioutil.Discard))
 }
@@ -43,6 +45,7 @@ func init() {
 func SetLogger(l grpclog.LoggerV2) {
 	lgMu.Lock()
 	lg = logutil.NewLogger(l)
+
 	// override grpclog so that any changes happen with locking
 	grpclog.SetLoggerV2(lg)
 	lgMu.Unlock()

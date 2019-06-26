@@ -26,6 +26,7 @@ var (
 	// where server indicates it did not process the data. gRPC default is default is "FailFast(true)"
 	// but for etcd we default to "FailFast(false)" to minimize client request error responses due to
 	// transient failures.
+	// 减少客户端错误，关闭fail fast
 	defaultFailFast = grpc.FailFast(false)
 
 	// client-side request send limit, gRPC default is math.MaxInt32
@@ -37,29 +38,36 @@ var (
 	// Make sure that "client-side receive limit >= server-side default send/recv limit"
 	// because range response can easily exceed request send limits
 	// Default to math.MaxInt32; writes exceeding server-side send limit fails anyway
+	// 发送消息最大大小
 	defaultMaxCallRecvMsgSize = grpc.MaxCallRecvMsgSize(math.MaxInt32)
 
 	// client-side non-streaming retry limit, only applied to requests where server responds with
 	// a error code clearly indicating it was unable to process the request such as codes.Unavailable.
 	// If set to 0, retry is disabled.
+	// 重试次数
 	defaultUnaryMaxRetries uint = 100
 
 	// client-side streaming retry limit, only applied to requests where server responds with
 	// a error code clearly indicating it was unable to process the request such as codes.Unavailable.
 	// If set to 0, retry is disabled.
+	// 流最大重试次数
 	defaultStreamMaxRetries = uint(^uint(0)) // max uint
 
 	// client-side retry backoff wait between requests.
+	// 退避等待平均时间
 	defaultBackoffWaitBetween = 25 * time.Millisecond
 
 	// client-side retry backoff default jitter fraction.
+	// 退避等待时间波动比率
 	defaultBackoffJitterFraction = 0.10
 )
 
 // defaultCallOpts defines a list of default "gRPC.CallOption".
 // Some options are exposed to "clientv3.Config".
 // Defaults will be overridden by the settings in "clientv3.Config".
+// 默认调用选项
 var defaultCallOpts = []grpc.CallOption{defaultFailFast, defaultMaxCallSendMsgSize, defaultMaxCallRecvMsgSize}
 
 // MaxLeaseTTL is the maximum lease TTL value
+// 最大租约时间
 const MaxLeaseTTL = 9000000000

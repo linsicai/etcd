@@ -53,42 +53,44 @@ type Txn interface {
 }
 
 type txn struct {
-	kv  *kv
-	ctx context.Context
+	kv  *kv // kv
+	ctx context.Context // 上下文
 
-	mu    sync.Mutex
-	cif   bool
-	cthen bool
-	celse bool
+	mu    sync.Mutex // 锁
+	cif   bool // 有if ？
+	cthen bool // 有 then ？
+	celse bool // 有else ？
 
-	isWrite bool
+	isWrite bool // 写操作
 
-	cmps []*pb.Compare
+	cmps []*pb.Compare // 比较列表
 
-	sus []*pb.RequestOp
-	fas []*pb.RequestOp
+	sus []*pb.RequestOp // 成功操作
+	fas []*pb.RequestOp // 失败操作
 
-	callOpts []grpc.CallOption
+	callOpts []grpc.CallOption // rpc 选项
 }
 
 func (txn *txn) If(cs ...Cmp) Txn {
+    // 加锁
 	txn.mu.Lock()
 	defer txn.mu.Unlock()
 
+    // 校验是否已经操作过了
 	if txn.cif {
 		panic("cannot call If twice!")
 	}
-
 	if txn.cthen {
 		panic("cannot call If after Then!")
 	}
-
 	if txn.celse {
 		panic("cannot call If after Else!")
 	}
 
+    // 设置if 过了
 	txn.cif = true
 
+    // 保存比较项
 	for i := range cs {
 		txn.cmps = append(txn.cmps, (*pb.Compare)(&cs[i]))
 	}
@@ -97,9 +99,11 @@ func (txn *txn) If(cs ...Cmp) Txn {
 }
 
 func (txn *txn) Then(ops ...Op) Txn {
+    // 加锁
 	txn.mu.Lock()
 	defer txn.mu.Unlock()
 
+    // 校验是否操作过了
 	if txn.cthen {
 		panic("cannot call Then twice!")
 	}
@@ -107,9 +111,12 @@ func (txn *txn) Then(ops ...Op) Txn {
 		panic("cannot call Then after Else!")
 	}
 
+    // 设置 then 过了
 	txn.cthen = true
 
+    // 保存成功操作
 	for _, op := range ops {
+	    // 设置写操作位
 		txn.isWrite = txn.isWrite || op.isWrite()
 		txn.sus = append(txn.sus, op.toRequestOp())
 	}
@@ -118,16 +125,21 @@ func (txn *txn) Then(ops ...Op) Txn {
 }
 
 func (txn *txn) Else(ops ...Op) Txn {
+    // 加锁
 	txn.mu.Lock()
 	defer txn.mu.Unlock()
 
+    // 校验是否操作过了
 	if txn.celse {
 		panic("cannot call Else twice!")
 	}
 
+    // 设置else 过了
 	txn.celse = true
 
+    // 保存操作列表
 	for _, op := range ops {
+	    // 设置写操作位
 		txn.isWrite = txn.isWrite || op.isWrite()
 		txn.fas = append(txn.fas, op.toRequestOp())
 	}
@@ -136,16 +148,20 @@ func (txn *txn) Else(ops ...Op) Txn {
 }
 
 func (txn *txn) Commit() (*TxnResponse, error) {
+    // 加锁
 	txn.mu.Lock()
 	defer txn.mu.Unlock()
 
+    // 构建提交事务
 	r := &pb.TxnRequest{Compare: txn.cmps, Success: txn.sus, Failure: txn.fas}
 
+    // 提交事务
 	var resp *pb.TxnResponse
 	var err error
 	resp, err = txn.kv.remote.Txn(txn.ctx, r, txn.callOpts...)
 	if err != nil {
 		return nil, toErr(txn.ctx, err)
 	}
+
 	return (*TxnResponse)(resp), nil
 }

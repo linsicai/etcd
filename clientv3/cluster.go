@@ -31,23 +31,29 @@ type (
 	MemberUpdateResponse pb.MemberUpdateResponse
 )
 
+// 集群接口
 type Cluster interface {
 	// MemberList lists the current cluster membership.
+	// 查询成员列表
 	MemberList(ctx context.Context) (*MemberListResponse, error)
 
 	// MemberAdd adds a new member into the cluster.
+	// 增加成员
 	MemberAdd(ctx context.Context, peerAddrs []string) (*MemberAddResponse, error)
 
 	// MemberRemove removes an existing member from the cluster.
+	// 删除成员
 	MemberRemove(ctx context.Context, id uint64) (*MemberRemoveResponse, error)
 
 	// MemberUpdate updates the peer addresses of the member.
+	// 更新成员
 	MemberUpdate(ctx context.Context, id uint64, peerAddrs []string) (*MemberUpdateResponse, error)
 }
 
+// 集群api
 type cluster struct {
-	remote   pb.ClusterClient
-	callOpts []grpc.CallOption
+	remote   pb.ClusterClient // 集群客户端
+	callOpts []grpc.CallOption // 集群调用选项
 }
 
 func NewCluster(c *Client) Cluster {
@@ -68,6 +74,7 @@ func NewClusterFromClusterClient(remote pb.ClusterClient, c *Client) Cluster {
 
 func (c *cluster) MemberAdd(ctx context.Context, peerAddrs []string) (*MemberAddResponse, error) {
 	// fail-fast before panic in rafthttp
+	// 校验地址
 	if _, err := types.NewURLs(peerAddrs); err != nil {
 		return nil, err
 	}

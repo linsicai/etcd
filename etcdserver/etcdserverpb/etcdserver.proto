@@ -8,6 +8,7 @@ option (gogoproto.sizer_all) = true;
 option (gogoproto.unmarshaler_all) = true;
 option (gogoproto.goproto_getters_all) = false;
 
+// 请求
 message Request {
 	optional uint64 ID         =  1 [(gogoproto.nullable) = false];
 	optional string Method     =  2 [(gogoproto.nullable) = false];
@@ -28,6 +29,7 @@ message Request {
 	optional bool   Refresh    = 17 [(gogoproto.nullable) = true];
 }
 
+// 元信息
 message Metadata {
 	optional uint64 NodeID    = 1 [(gogoproto.nullable) = false];
 	optional uint64 ClusterID = 2 [(gogoproto.nullable) = false];

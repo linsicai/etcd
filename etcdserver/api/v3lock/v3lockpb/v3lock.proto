@@ -18,6 +18,7 @@ service Lock {
   // transactions to safely ensure updates to etcd only occur while holding
   // lock ownership. The lock is held until Unlock is called on the key or the
   // lease associate with the owner expires.
+  // 加锁
   rpc Lock(LockRequest) returns (LockResponse) {
       option (google.api.http) = {
         post: "/v3/lock/lock"
@@ -28,6 +29,7 @@ service Lock {
   // Unlock takes a key returned by Lock and releases the hold on lock. The
   // next Lock caller waiting for the lock will then be woken up and given
   // ownership of the lock.
+  // 解锁
   rpc Unlock(UnlockRequest) returns (UnlockResponse) {
       option (google.api.http) = {
         post: "/v3/lock/unlock"
@@ -38,28 +40,34 @@ service Lock {
 
 message LockRequest {
   // name is the identifier for the distributed shared lock to be acquired.
+  // 名字
   bytes name = 1;
+
   // lease is the ID of the lease that will be attached to ownership of the
   // lock. If the lease expires or is revoked and currently holds the lock,
   // the lock is automatically released. Calls to Lock with the same lease will
   // be treated as a single acquisition; locking twice with the same lease is a
   // no-op.
+  // 租约
   int64 lease = 2;
 }
 
 message LockResponse {
-  etcdserverpb.ResponseHeader header = 1;
+  etcdserverpb.ResponseHeader header = 1; // 通用回包
   // key is a key that will exist on etcd for the duration that the Lock caller
   // owns the lock. Users should not modify this key or the lock may exhibit
   // undefined behavior.
+  // 租约key
   bytes key = 2;
 }
 
+// 解锁请求
 message UnlockRequest {
   // key is the lock ownership key granted by Lock.
   bytes key = 1;
 }
 
+// 解锁响应
 message UnlockResponse {
   etcdserverpb.ResponseHeader header = 1;
 }

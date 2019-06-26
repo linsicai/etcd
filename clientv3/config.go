@@ -29,23 +29,28 @@ type Config struct {
 
 	// AutoSyncInterval is the interval to update endpoints with its latest members.
 	// 0 disables auto-sync. By default auto-sync is disabled.
+	// 自动同步间隔
 	AutoSyncInterval time.Duration `json:"auto-sync-interval"`
 
 	// DialTimeout is the timeout for failing to establish a connection.
+	// 拨号超时时间
 	DialTimeout time.Duration `json:"dial-timeout"`
 
 	// DialKeepAliveTime is the time after which client pings the server to see if
 	// transport is alive.
+	// 拨号keep 时间
 	DialKeepAliveTime time.Duration `json:"dial-keep-alive-time"`
 
 	// DialKeepAliveTimeout is the time that the client waits for a response for the
 	// keep-alive probe. If the response is not received in this time, the connection is closed.
+	// 拨号keep 超时时间
 	DialKeepAliveTimeout time.Duration `json:"dial-keep-alive-timeout"`
 
 	// MaxCallSendMsgSize is the client-side request send limit in bytes.
 	// If 0, it defaults to 2.0 MiB (2 * 1024 * 1024).
 	// Make sure that "MaxCallSendMsgSize" < server-side default send/recv limit.
 	// ("--max-request-bytes" flag to etcd or "embed.Config.MaxRequestBytes").
+	// 最大发送消息长度
 	MaxCallSendMsgSize int
 
 	// MaxCallRecvMsgSize is the client-side response receive limit.
@@ -53,39 +58,49 @@ type Config struct {
 	// easily exceed request send limits.
 	// Make sure that "MaxCallRecvMsgSize" >= server-side default send/recv limit.
 	// ("--max-request-bytes" flag to etcd or "embed.Config.MaxRequestBytes").
+	// 最大接受消息长度
 	MaxCallRecvMsgSize int
 
 	// TLS holds the client secure credentials, if any.
+	// tls 配置
 	TLS *tls.Config
 
 	// Username is a user name for authentication.
+	// 用户名
 	Username string `json:"username"`
 
 	// Password is a password for authentication.
+	// 密码
 	Password string `json:"password"`
 
 	// RejectOldCluster when set will refuse to create a client against an outdated cluster.
+	// 拒绝老集群
 	RejectOldCluster bool `json:"reject-old-cluster"`
 
 	// DialOptions is a list of dial options for the grpc client (e.g., for interceptors).
+	// 拨号选项
 	DialOptions []grpc.DialOption
 
 	// Context is the default client context; it can be used to cancel grpc dial out and
 	// other operations that do not have an explicit context.
+	// 上下文
 	Context context.Context
 
 	// LogConfig configures client-side logger.
 	// If nil, use the default logger.
 	// TODO: configure gRPC logger
+	// 日志配置
 	LogConfig *zap.Config
 
 	// PermitWithoutStream when set will allow client to send keepalive pings to server without any active streams(RPCs).
+	// 允许客户端主动发ping
 	PermitWithoutStream bool `json:"permit-without-stream"`
 }
 
 // DefaultLogConfig is the default client logging configuration.
 // Default log level is "Warn". Use "zap.InfoLevel" for debugging.
 // Use "/dev/null" for output paths, to discard all logs.
+// 默认日志配置
 var DefaultLogConfig = zap.Config{
 	Level:       zap.NewAtomicLevelAt(zap.WarnLevel),
 	Development: false,

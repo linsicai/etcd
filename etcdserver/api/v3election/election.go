@@ -25,8 +25,10 @@ import (
 
 // ErrMissingLeaderKey is returned when election API request
 // is missing the "leader" field.
+// 异常
 var ErrMissingLeaderKey = errors.New(`"leader" field must be provided`)
 
+// 选举服务
 type electionServer struct {
 	c *clientv3.Client
 }
@@ -36,14 +38,19 @@ func NewElectionServer(c *clientv3.Client) epb.ElectionServer {
 }
 
 func (es *electionServer) Campaign(ctx context.Context, req *epb.CampaignRequest) (*epb.CampaignResponse, error) {
+    // 创建会话
 	s, err := es.session(ctx, req.Lease)
 	if err != nil {
 		return nil, err
 	}
+
+    // 发起战役
 	e := concurrency.NewElection(s, string(req.Name))
 	if err = e.Campaign(ctx, string(req.Value)); err != nil {
 		return nil, err
 	}
+
+    // 返回结果
 	return &epb.CampaignResponse{
 		Header: e.Header(),
 		Leader: &epb.LeaderKey{
@@ -56,17 +63,22 @@ func (es *electionServer) Campaign(ctx context.Context, req *epb.CampaignRequest
 }
 
 func (es *electionServer) Proclaim(ctx context.Context, req *epb.ProclaimRequest) (*epb.ProclaimResponse, error) {
+    // 校验leader
 	if req.Leader == nil {
 		return nil, ErrMissingLeaderKey
 	}
+
+    // 创建会话
 	s, err := es.session(ctx, req.Leader.Lease)
 	if err != nil {
 		return nil, err
 	}
+
 	e := concurrency.ResumeElection(s, string(req.Leader.Name), string(req.Leader.Key), req.Leader.Rev)
 	if err := e.Proclaim(ctx, string(req.Value)); err != nil {
 		return nil, err
 	}
+
 	return &epb.ProclaimResponse{Header: e.Header()}, nil
 }
 
@@ -75,6 +87,7 @@ func (es *electionServer) Observe(req *epb.LeaderRequest, stream epb.Election_Ob
 	if err != nil {
 		return err
 	}
+
 	e := concurrency.NewElection(s, string(req.Name))
 	ch := e.Observe(stream.Context())
 	for stream.Context().Err() == nil {

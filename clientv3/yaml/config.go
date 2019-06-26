@@ -27,12 +27,19 @@ import (
 )
 
 type yamlConfig struct {
+    // 客户端配置
 	clientv3.Config
 
+    // 不安全的传输
 	InsecureTransport     bool   `json:"insecure-transport"`
+
+    // 跳过tls 验证
 	InsecureSkipTLSVerify bool   `json:"insecure-skip-tls-verify"`
+	// 证书文件
 	Certfile              string `json:"cert-file"`
+	// key 文件
 	Keyfile               string `json:"key-file"`
+	// 可信ca 文件
 	TrustedCAfile         string `json:"trusted-ca-file"`
 
 	// CAfile is being deprecated. Use 'TrustedCAfile' instead.
@@ -42,6 +49,7 @@ type yamlConfig struct {
 
 // NewConfig creates a new clientv3.Config from a yaml file.
 func NewConfig(fpath string) (*clientv3.Config, error) {
+    // 读取文件
 	b, err := ioutil.ReadFile(fpath)
 	if err != nil {
 		return nil, err
@@ -49,11 +57,13 @@ func NewConfig(fpath string) (*clientv3.Config, error) {
 
 	yc := &yamlConfig{}
 
+    // 反序列化
 	err = yaml.Unmarshal(b, yc)
 	if err != nil {
 		return nil, err
 	}
 
+    // 不加密
 	if yc.InsecureTransport {
 		return &yc.Config, nil
 	}
@@ -63,6 +73,7 @@ func NewConfig(fpath string) (*clientv3.Config, error) {
 		cp   *x509.CertPool
 	)
 
+    // 读取证书
 	if yc.Certfile != "" && yc.Keyfile != "" {
 		cert, err = tlsutil.NewCert(yc.Certfile, yc.Keyfile, nil)
 		if err != nil {
@@ -70,6 +81,7 @@ func NewConfig(fpath string) (*clientv3.Config, error) {
 		}
 	}
 
+    // 读取ca
 	if yc.TrustedCAfile != "" {
 		cp, err = tlsutil.NewCertPool([]string{yc.TrustedCAfile})
 		if err != nil {
@@ -77,6 +89,7 @@ func NewConfig(fpath string) (*clientv3.Config, error) {
 		}
 	}
 
+    // 设置tls 配置
 	tlscfg := &tls.Config{
 		MinVersion:         tls.VersionTLS12,
 		InsecureSkipVerify: yc.InsecureSkipTLSVerify,

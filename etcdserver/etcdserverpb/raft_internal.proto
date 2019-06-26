@@ -10,18 +10,26 @@ option (gogoproto.sizer_all) = true;
 option (gogoproto.unmarshaler_all) = true;
 option (gogoproto.goproto_getters_all) = false;
 
+// 请求头部
 message RequestHeader {
-  uint64 ID = 1;
+  uint64 ID = 1; // ID
+
   // username is a username that is associated with an auth token of gRPC connection
+  // 用户名
   string username = 2;
+
   // auth_revision is a revision number of auth.authStore. It is not related to mvcc
+  // 验证版本
   uint64 auth_revision = 3;
 }
 
 // An InternalRaftRequest is the union of all requests which can be
 // sent via raft.
+// 内部raft 请求
 message InternalRaftRequest {
+  // 头部
   RequestHeader header = 100;
+
   uint64 ID = 1;
 
   Request v2 = 2;
@@ -60,12 +68,14 @@ message InternalRaftRequest {
   AuthRoleRevokePermissionRequest auth_role_revoke_permission = 1204;
 }
 
+// 空响应包
 message EmptyResponse {
 }
 
 // What is the difference between AuthenticateRequest (defined in rpc.proto) and InternalAuthenticateRequest?
 // InternalAuthenticateRequest has a member that is filled by etcdserver and shouldn't be user-facing.
 // For avoiding misusage the field, we have an internal version of AuthenticateRequest.
+// 内部认证请求
 message InternalAuthenticateRequest {
   string name = 1;
   string password = 2;

@@ -28,7 +28,9 @@ import (
 
 // Revision compacts the log by purging revisions older than
 // the configured reivison number. Compaction happens every 5 minutes.
+// 版本号
 type Revision struct {
+    // 日志
 	lg *zap.Logger
 
 	clock     clockwork.Clock
@@ -63,12 +65,14 @@ const revInterval = 5 * time.Minute
 // Run runs revision-based compactor.
 func (rc *Revision) Run() {
 	prev := int64(0)
+
 	go func() {
 		for {
 			select {
-			case <-rc.ctx.Done():
+			case <-rc.ctx.Done(): // 结束
 				return
 			case <-rc.clock.After(revInterval):
+			    // 停止
 				rc.mu.Lock()
 				p := rc.paused
 				rc.mu.Unlock()
@@ -77,12 +81,14 @@ func (rc *Revision) Run() {
 				}
 			}
 
+            // 校验版本号
 			rev := rc.rg.Rev() - rc.retention
 			if rev <= 0 || rev == prev {
 				continue
 			}
 
 			now := time.Now()
+			// 日志
 			if rc.lg != nil {
 				rc.lg.Info(
 					"starting auto revision compaction",
@@ -92,6 +98,7 @@ func (rc *Revision) Run() {
 			} else {
 				plog.Noticef("Starting auto-compaction at revision %d (retention: %d revisions)", rev, rc.retention)
 			}
+
 			_, err := rc.c.Compact(rc.ctx, &pb.CompactionRequest{Revision: rev})
 			if err == nil || err == mvcc.ErrCompacted {
 				prev = rev

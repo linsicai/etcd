@@ -19,14 +19,17 @@ import (
 )
 
 // CompactOp represents a compact operation.
+// 操作
 type CompactOp struct {
 	revision int64
 	physical bool
 }
 
 // CompactOption configures compact operation.
+// 选项，即函数
 type CompactOption func(*CompactOp)
 
+// 选项生效
 func (op *CompactOp) applyCompactOpts(opts []CompactOption) {
 	for _, opt := range opts {
 		opt(op)
@@ -34,18 +37,21 @@ func (op *CompactOp) applyCompactOpts(opts []CompactOption) {
 }
 
 // OpCompact wraps slice CompactOption to create a CompactOp.
+// 创建操作
 func OpCompact(rev int64, opts ...CompactOption) CompactOp {
 	ret := CompactOp{revision: rev}
 	ret.applyCompactOpts(opts)
 	return ret
 }
 
+// 结构转换
 func (op CompactOp) toRequest() *pb.CompactionRequest {
 	return &pb.CompactionRequest{Revision: op.revision, Physical: op.physical}
 }
 
 // WithCompactPhysical makes Compact wait until all compacted entries are
 // removed from the etcd server's storage.
+// 默认选项
 func WithCompactPhysical() CompactOption {
 	return func(op *CompactOp) { op.physical = true }
 }

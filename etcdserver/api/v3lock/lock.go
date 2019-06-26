@@ -22,15 +22,18 @@ import (
 	"go.etcd.io/etcd/etcdserver/api/v3lock/v3lockpb"
 )
 
+// 锁服务
 type lockServer struct {
 	c *clientv3.Client
 }
 
+// 构造函数
 func NewLockServer(c *clientv3.Client) v3lockpb.LockServer {
 	return &lockServer{c}
 }
 
 func (ls *lockServer) Lock(ctx context.Context, req *v3lockpb.LockRequest) (*v3lockpb.LockResponse, error) {
+    // 创建并发请求
 	s, err := concurrency.NewSession(
 		ls.c,
 		concurrency.WithLease(clientv3.LeaseID(req.Lease)),
@@ -39,18 +42,26 @@ func (ls *lockServer) Lock(ctx context.Context, req *v3lockpb.LockRequest) (*v3l
 	if err != nil {
 		return nil, err
 	}
+
+    // ？
 	s.Orphan()
+
+    // 创建锁
 	m := concurrency.NewMutex(s, string(req.Name))
 	if err = m.Lock(ctx); err != nil {
 		return nil, err
 	}
+
 	return &v3lockpb.LockResponse{Header: m.Header(), Key: []byte(m.Key())}, nil
 }
 
 func (ls *lockServer) Unlock(ctx context.Context, req *v3lockpb.UnlockRequest) (*v3lockpb.UnlockResponse, error) {
+    // 发送删除请求
 	resp, err := ls.c.Delete(ctx, string(req.Key))
 	if err != nil {
 		return nil, err
 	}
+
+    // 拼回包
 	return &v3lockpb.UnlockResponse{Header: resp.Header}, nil
 }

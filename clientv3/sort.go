@@ -17,12 +17,15 @@ package clientv3
 type SortTarget int
 type SortOrder int
 
+// 排序顺序，增序、降序
 const (
 	SortNone SortOrder = iota
 	SortAscend
 	SortDescend
 )
 
+// 按k、v
+// 按版本、创建版本、修改版本
 const (
 	SortByKey SortTarget = iota
 	SortByVersion
@@ -32,6 +35,6 @@ const (
 )
 
 type SortOption struct {
-	Target SortTarget
-	Order  SortOrder
+	Target SortTarget // 排序目标
+	Order  SortOrder  // 排序顺序
 }

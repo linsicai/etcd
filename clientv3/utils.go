@@ -26,6 +26,9 @@ import (
 //
 // Reference: https://godoc.org/github.com/grpc-ecosystem/go-grpc-middleware/util/backoffutils
 func jitterUp(duration time.Duration, jitter float64) time.Duration {
+    // [0,1) to [-1, 1) * jitter
 	multiplier := jitter * (rand.Float64()*2 - 1)
+
+    // 波动
 	return time.Duration(float64(duration) * (1 + multiplier))
 }

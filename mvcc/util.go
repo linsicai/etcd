@@ -29,16 +29,19 @@ func UpdateConsistentIndex(be backend.Backend, index uint64) {
 	tx.Lock()
 	defer tx.Unlock()
 
+    // 读取老序列号
 	var oldi uint64
 	_, vs := tx.UnsafeRange(metaBucketName, consistentIndexKeyName, nil, 0)
 	if len(vs) != 0 {
 		oldi = binary.BigEndian.Uint64(vs[0])
 	}
 
+    // 校验index
 	if index <= oldi {
 		return
 	}
 
+    // 写index
 	bs := make([]byte, 8)
 	binary.BigEndian.PutUint64(bs, index)
 	tx.UnsafePut(metaBucketName, consistentIndexKeyName, bs)

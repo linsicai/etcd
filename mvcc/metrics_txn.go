@@ -18,9 +18,10 @@ import "go.etcd.io/etcd/lease"
 
 type metricsTxnWrite struct {
 	TxnWrite
-	ranges  uint
-	puts    uint
-	deletes uint
+
+	ranges  uint // 范围
+	puts    uint // 写
+	deletes uint // 删除
 }
 
 func newMetricsTxnRead(tr TxnRead) TxnRead {
@@ -51,6 +52,7 @@ func (tw *metricsTxnWrite) End() {
 	if sum := tw.ranges + tw.puts + tw.deletes; sum > 1 {
 		txnCounter.Inc()
 	}
+
 	rangeCounter.Add(float64(tw.ranges))
 	putCounter.Add(float64(tw.puts))
 	deleteCounter.Add(float64(tw.deletes))

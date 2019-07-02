@@ -24,16 +24,17 @@ message KeyValue {
   // version is the version of the key. A deletion resets
   // the version to zero and any modification of the key
   // increases its version.
-  // 当前版本
+  // 当前版本，删除操作后会重置版本
   int64 version = 4;
 
   // value is the value held by the key, in bytes.
+  // 值
   bytes value = 5;
 
   // lease is the ID of the lease that attached to key.
   // When the attached lease expires, the key will be deleted.
   // If lease is 0, then no lease is attached to the key.
-  // 租约id
+  // 租约id，对于一个超时时间
   int64 lease = 6;
 }
 
@@ -46,7 +47,7 @@ message Event {
   // type is the kind of event. If type is a PUT, it indicates
   // new data has been stored to the key. If type is a DELETE,
   // it indicates the key was deleted.
-  // 事件类型
+  // 事件类型，设置或删除
   EventType type = 1;
 
   // kv holds the KeyValue for the event.

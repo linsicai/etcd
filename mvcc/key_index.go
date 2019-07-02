@@ -68,16 +68,21 @@ var (
 // generations:
 //    {empty} -> key SHOULD be removed.
 type keyIndex struct {
+    // key 值
 	key         []byte
+	// 修改版本
 	modified    revision // the main rev of the last modification
+	// 代列表
 	generations []generation
 }
 
 // put puts a revision to the keyIndex.
 func (ki *keyIndex) put(lg *zap.Logger, main int64, sub int64) {
+    // 构建版本号
 	rev := revision{main: main, sub: sub}
 
 	if !rev.GreaterThan(ki.modified) {
+	    // 老版本，报错
 		if lg != nil {
 			lg.Panic(
 				"'put' with an unexpected smaller revision",
@@ -90,14 +95,22 @@ func (ki *keyIndex) put(lg *zap.Logger, main int64, sub int64) {
 			plog.Panicf("store.keyindex: put with unexpected smaller revision [%v / %v]", rev, ki.modified)
 		}
 	}
+
+    // 看是否创建初代
 	if len(ki.generations) == 0 {
 		ki.generations = append(ki.generations, generation{})
 	}
+
+    // 取最后一代
 	g := &ki.generations[len(ki.generations)-1]
+
+    // 看是否这代的第一个版本
 	if len(g.revs) == 0 { // create a new key
 		keysGauge.Inc()
 		g.created = rev
 	}
+
+    // 记录版本号，版本序号，修改版本号
 	g.revs = append(g.revs, rev)
 	g.ver++
 	ki.modified = rev
@@ -105,6 +118,7 @@ func (ki *keyIndex) put(lg *zap.Logger, main int64, sub int64) {
 
 func (ki *keyIndex) restore(lg *zap.Logger, created, modified revision, ver int64) {
 	if len(ki.generations) != 0 {
+	    // 有数据了还恢复，报错
 		if lg != nil {
 			lg.Panic(
 				"'restore' got an unexpected non-empty generations",
@@ -115,7 +129,10 @@ func (ki *keyIndex) restore(lg *zap.Logger, created, modified revision, ver int6
 		}
 	}
 
+    // 记录版本号
 	ki.modified = modified
+
+    // 创建初代
 	g := generation{created: created, ver: ver, revs: []revision{modified}}
 	ki.generations = append(ki.generations, g)
 	keysGauge.Inc()
@@ -126,6 +143,7 @@ func (ki *keyIndex) restore(lg *zap.Logger, created, modified revision, ver int6
 // It returns ErrRevisionNotFound when tombstone on an empty generation.
 func (ki *keyIndex) tombstone(lg *zap.Logger, main int64, sub int64) error {
 	if ki.isEmpty() {
+	    // 没有数据怎么建立墓碑，报错
 		if lg != nil {
 			lg.Panic(
 				"'tombstone' got an unexpected empty keyIndex",
@@ -135,10 +153,16 @@ func (ki *keyIndex) tombstone(lg *zap.Logger, main int64, sub int64) error {
 			plog.Panicf("store.keyindex: unexpected tombstone on empty keyIndex %s", string(ki.key))
 		}
 	}
+
+    // 最后一代是空的，报错
 	if ki.generations[len(ki.generations)-1].isEmpty() {
 		return ErrRevisionNotFound
 	}
+
+    // 写版本
 	ki.put(lg, main, sub)
+
+    // 新的一代开始了
 	ki.generations = append(ki.generations, generation{})
 	keysGauge.Dec()
 	return nil
@@ -148,6 +172,7 @@ func (ki *keyIndex) tombstone(lg *zap.Logger, main int64, sub int64) error {
 // Rev must be higher than or equal to the given atRev.
 func (ki *keyIndex) get(lg *zap.Logger, atRev int64) (modified, created revision, ver int64, err error) {
 	if ki.isEmpty() {
+	    // 空的还获取，报错
 		if lg != nil {
 			lg.Panic(
 				"'get' got an unexpected empty keyIndex",
@@ -157,16 +182,20 @@ func (ki *keyIndex) get(lg *zap.Logger, atRev int64) (modified, created revision
 			plog.Panicf("store.keyindex: unexpected get on empty keyIndex %s", string(ki.key))
 		}
 	}
+
+    // 找代
 	g := ki.findGeneration(atRev)
 	if g.isEmpty() {
 		return revision{}, revision{}, 0, ErrRevisionNotFound
 	}
 
+    // 找比制定ver大的前一个
 	n := g.walk(func(rev revision) bool { return rev.main > atRev })
 	if n != -1 {
 		return g.revs[n], g.created, g.ver - int64(len(g.revs)-n-1), nil
 	}
 
+    // 找不到
 	return revision{}, revision{}, 0, ErrRevisionNotFound
 }
 
@@ -175,6 +204,7 @@ func (ki *keyIndex) get(lg *zap.Logger, atRev int64) (modified, created revision
 // main revision.
 func (ki *keyIndex) since(lg *zap.Logger, rev int64) []revision {
 	if ki.isEmpty() {
+	    // 空的报错
 		if lg != nil {
 			lg.Panic(
 				"'since' got an unexpected empty keyIndex",
@@ -184,7 +214,11 @@ func (ki *keyIndex) since(lg *zap.Logger, rev int64) []revision {
 			plog.Panicf("store.keyindex: unexpected get on empty keyIndex %s", string(ki.key))
 		}
 	}
+
+    // 结构转换
 	since := revision{rev, 0}
+
+    // 从后往前找代
 	var gi int
 	// find the generations to start checking
 	for gi = len(ki.generations) - 1; gi > 0; gi-- {
@@ -197,6 +231,7 @@ func (ki *keyIndex) since(lg *zap.Logger, rev int64) []revision {
 		}
 	}
 
+    // 主版本相同，保留最后一个
 	var revs []revision
 	var last int64
 	for ; gi < len(ki.generations); gi++ {
@@ -223,6 +258,7 @@ func (ki *keyIndex) since(lg *zap.Logger, rev int64) []revision {
 // If a generation becomes empty during compaction, it will be removed.
 func (ki *keyIndex) compact(lg *zap.Logger, atRev int64, available map[revision]struct{}) {
 	if ki.isEmpty() {
+	    // 空值报错
 		if lg != nil {
 			lg.Panic(
 				"'compact' got an unexpected empty keyIndex",
@@ -233,15 +269,20 @@ func (ki *keyIndex) compact(lg *zap.Logger, atRev int64, available map[revision]
 		}
 	}
 
+    // 计算压缩位置
 	genIdx, revIndex := ki.doCompact(atRev, available)
 
+    // 压缩临界代
 	g := &ki.generations[genIdx]
 	if !g.isEmpty() {
 		// remove the previous contents.
+		// 代版本压缩
 		if revIndex != -1 {
 			g.revs = g.revs[revIndex:]
 		}
+
 		// remove any tombstone
+		// 只剩一个版本，肯定是墓碑，干掉
 		if len(g.revs) == 1 && genIdx != len(ki.generations)-1 {
 			delete(available, g.revs[0])
 			genIdx++
@@ -249,19 +290,24 @@ func (ki *keyIndex) compact(lg *zap.Logger, atRev int64, available map[revision]
 	}
 
 	// remove the previous generations.
+	// 干掉压缩代
 	ki.generations = ki.generations[genIdx:]
 }
 
 // keep finds the revision to be kept if compact is called at given atRev.
 func (ki *keyIndex) keep(atRev int64, available map[revision]struct{}) {
 	if ki.isEmpty() {
+	    // 空值退出
 		return
 	}
 
+    // 计算压缩位置
 	genIdx, revIndex := ki.doCompact(atRev, available)
+
 	g := &ki.generations[genIdx]
 	if !g.isEmpty() {
 		// remove any tombstone
+		// 删除墓碑内的值
 		if revIndex == len(g.revs)-1 && genIdx != len(ki.generations)-1 {
 			delete(available, g.revs[revIndex])
 		}
@@ -271,6 +317,7 @@ func (ki *keyIndex) keep(atRev int64, available map[revision]struct{}) {
 func (ki *keyIndex) doCompact(atRev int64, available map[revision]struct{}) (genIdx int, revIndex int) {
 	// walk until reaching the first revision smaller or equal to "atRev",
 	// and add the revision to the available map
+	// 定义清理函数
 	f := func(rev revision) bool {
 		if rev.main <= atRev {
 			available[rev] = struct{}{}
@@ -279,8 +326,11 @@ func (ki *keyIndex) doCompact(atRev int64, available map[revision]struct{}) (gen
 		return true
 	}
 
+    // 初始化
 	genIdx, g := 0, &ki.generations[0]
+
 	// find first generation includes atRev or created after atRev
+	// 往前走，找第一个有该版本的代
 	for genIdx < len(ki.generations)-1 {
 		if tomb := g.revs[len(g.revs)-1].main; tomb > atRev {
 			break
@@ -289,6 +339,7 @@ func (ki *keyIndex) doCompact(atRev int64, available map[revision]struct{}) (gen
 		g = &ki.generations[genIdx]
 	}
 
+    // 找代内序号
 	revIndex = g.walk(f)
 
 	return genIdx, revIndex
@@ -305,29 +356,39 @@ func (ki *keyIndex) findGeneration(rev int64) *generation {
 	lastg := len(ki.generations) - 1
 	cg := lastg
 
+    // 从后往前找
 	for cg >= 0 {
+	    // 空代，继续向前
 		if len(ki.generations[cg].revs) == 0 {
 			cg--
 			continue
 		}
+
 		g := ki.generations[cg]
 		if cg != lastg {
+		    // 最后一个版本都不够大，返回
 			if tomb := g.revs[len(g.revs)-1].main; tomb <= rev {
 				return nil
 			}
 		}
+
+        // 应该是这一代了
 		if g.revs[0].main <= rev {
 			return &ki.generations[cg]
 		}
+
+        // 继续找
 		cg--
 	}
 	return nil
 }
 
+// 比key
 func (ki *keyIndex) Less(b btree.Item) bool {
 	return bytes.Compare(ki.key, b.(*keyIndex).key) == -1
 }
 
+// 全部相等
 func (ki *keyIndex) equal(b *keyIndex) bool {
 	if !bytes.Equal(ki.key, b.key) {
 		return false
@@ -349,26 +410,34 @@ func (ki *keyIndex) equal(b *keyIndex) bool {
 
 func (ki *keyIndex) String() string {
 	var s string
+
 	for _, g := range ki.generations {
 		s += g.String()
 	}
+
 	return s
 }
 
 // generation contains multiple revisions of a key.
+// 一代key
 type generation struct {
 	ver     int64
+
+    // 创造者，所有人
 	created revision // when the generation is created (put in first revision).
 	revs    []revision
 }
 
-func (g *generation) isEmpty() bool { return g == nil || len(g.revs) == 0 }
+func (g *generation) isEmpty() bool {
+    return g == nil || len(g.revs) == 0
+}
 
 // walk walks through the revisions in the generation in descending order.
 // It passes the revision to the given function.
 // walk returns until: 1. it finishes walking all pairs 2. the function returns false.
 // walk returns the position at where it stopped. If it stopped after
 // finishing walking, -1 will be returned.
+// 逆序遍历版本
 func (g *generation) walk(f func(rev revision) bool) int {
 	l := len(g.revs)
 	for i := range g.revs {
@@ -380,10 +449,12 @@ func (g *generation) walk(f func(rev revision) bool) int {
 	return -1
 }
 
+// 代的信息
 func (g *generation) String() string {
 	return fmt.Sprintf("g: created[%d] ver[%d], revs %#v\n", g.created, g.ver, g.revs)
 }
 
+// 同代？
 func (g generation) equal(b generation) bool {
 	if g.ver != b.ver {
 		return false

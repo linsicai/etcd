@@ -21,6 +21,7 @@ import (
 )
 
 var (
+    // range 计数
 	rangeCounter = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace: "etcd_debugging",
@@ -29,6 +30,7 @@ var (
 			Help:      "Total number of ranges seen by this member.",
 		})
 
+    // put 计数
 	putCounter = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace: "etcd_debugging",
@@ -37,6 +39,7 @@ var (
 			Help:      "Total number of puts seen by this member.",
 		})
 
+    // 删除计数
 	deleteCounter = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace: "etcd_debugging",
@@ -45,6 +48,7 @@ var (
 			Help:      "Total number of deletes seen by this member.",
 		})
 
+    // 事务计数
 	txnCounter = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace: "etcd_debugging",
@@ -53,6 +57,7 @@ var (
 			Help:      "Total number of txns seen by this member.",
 		})
 
+	// key 数目
 	keysGauge = prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Namespace: "etcd_debugging",
@@ -61,6 +66,7 @@ var (
 			Help:      "Total number of keys.",
 		})
 
+	// watch 流数目
 	watchStreamGauge = prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Namespace: "etcd_debugging",
@@ -69,6 +75,7 @@ var (
 			Help:      "Total number of watch streams.",
 		})
 
+    // watch 者数目
 	watcherGauge = prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Namespace: "etcd_debugging",
@@ -77,6 +84,7 @@ var (
 			Help:      "Total number of watchers.",
 		})
 
+    // 慢watch 者数
 	slowWatcherGauge = prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Namespace: "etcd_debugging",
@@ -85,6 +93,7 @@ var (
 			Help:      "Total number of unsynced slow watchers.",
 		})
 
+    // 事件数
 	totalEventsCounter = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace: "etcd_debugging",
@@ -93,6 +102,7 @@ var (
 			Help:      "Total number of events sent by this member.",
 		})
 
+    // 待处理事件数
 	pendingEventsGauge = prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Namespace: "etcd_debugging",
@@ -101,6 +111,7 @@ var (
 			Help:      "Total number of pending events to be sent.",
 		})
 
+    // 索引压缩停止事件
 	indexCompactionPauseMs = prometheus.NewHistogram(
 		prometheus.HistogramOpts{
 			Namespace: "etcd_debugging",
@@ -113,6 +124,7 @@ var (
 			Buckets: prometheus.ExponentialBuckets(0.5, 2, 14),
 		})
 
+    // db 压缩停止时间
 	dbCompactionPauseMs = prometheus.NewHistogram(
 		prometheus.HistogramOpts{
 			Namespace: "etcd_debugging",
@@ -125,6 +137,7 @@ var (
 			Buckets: prometheus.ExponentialBuckets(1, 2, 13),
 		})
 
+    // 压缩总耗时
 	dbCompactionTotalMs = prometheus.NewHistogram(
 		prometheus.HistogramOpts{
 			Namespace: "etcd_debugging",
@@ -137,6 +150,7 @@ var (
 			Buckets: prometheus.ExponentialBuckets(100, 2, 14),
 		})
 
+    // 压缩key 数
 	dbCompactionKeysCounter = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace: "etcd_debugging",
@@ -145,6 +159,7 @@ var (
 			Help:      "Total number of db keys compacted.",
 		})
 
+    // db 总大小
 	dbTotalSize = prometheus.NewGaugeFunc(prometheus.GaugeOpts{
 		Namespace: "etcd",
 		Subsystem: "mvcc",
@@ -178,6 +193,7 @@ var (
 	reportDbTotalSizeInBytesDebuggingMu sync.RWMutex
 	reportDbTotalSizeInBytesDebugging   = func() float64 { return 0 }
 
+    // db 使用大小
 	dbTotalSizeInUse = prometheus.NewGaugeFunc(prometheus.GaugeOpts{
 		Namespace: "etcd",
 		Subsystem: "mvcc",
@@ -194,6 +210,7 @@ var (
 	reportDbTotalSizeInUseInBytesMu sync.RWMutex
 	reportDbTotalSizeInUseInBytes   = func() float64 { return 0 }
 
+    // hash 耗时
 	hashSec = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Namespace: "etcd",
 		Subsystem: "mvcc",
@@ -206,6 +223,7 @@ var (
 		Buckets: prometheus.ExponentialBuckets(.01, 2, 15),
 	})
 
+    // hash 耗时
 	hashRevSec = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Namespace: "etcd",
 		Subsystem: "mvcc",

@@ -145,9 +145,11 @@ type KV interface {
 	Hash() (hash uint32, revision int64, err error)
 
 	// HashByRev computes the hash of all MVCC revisions up to a given revision.
+	// 按版本hash
 	HashByRev(rev int64) (hash uint32, revision int64, compactRev int64, err error)
 
 	// Compact frees all superseded keys with revisions less than rev.
+	// 压缩
 	Compact(rev int64) (<-chan struct{}, error)
 
 	// Commit commits outstanding txns into the underlying backend.
@@ -155,7 +157,10 @@ type KV interface {
 	Commit()
 
 	// Restore restores the KV store from a backend.
+	// 恢复
 	Restore(b backend.Backend) error
+
+    // 关闭
 	Close() error
 }
 
@@ -183,5 +188,6 @@ type ConsistentWatchableKV interface {
 	WatchableKV
 
 	// ConsistentIndex returns the current consistent index of the KV.
+	// 一致性hash 索引
 	ConsistentIndex() uint64
 }

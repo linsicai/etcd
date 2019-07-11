@@ -28,8 +28,10 @@ import (
 // createMergedSnapshotMessage creates a snapshot message that contains: raft status (term, conf),
 // a snapshot of v2 store inside raft.Snapshot as []byte, a snapshot of v3 KV in the top level message
 // as ReadCloser.
+// 创建快照合并消息
 func (s *EtcdServer) createMergedSnapshotMessage(m raftpb.Message, snapt, snapi uint64, confState raftpb.ConfState) snap.Message {
 	// get a snapshot of v2 store as []byte
+	// clone 与保存
 	clone := s.v2store.Clone()
 	d, err := clone.SaveNoCopy()
 	if err != nil {
@@ -41,13 +43,17 @@ func (s *EtcdServer) createMergedSnapshotMessage(m raftpb.Message, snapt, snapi 
 	}
 
 	// commit kv to write metadata(for example: consistent index).
+	// 提交
 	s.KV().Commit()
+
+    // 构造新快照读取器
 	dbsnap := s.be.Snapshot()
 	// get a snapshot of v3 KV as readCloser
 	rc := newSnapshotReaderCloser(s.getLogger(), dbsnap)
 
 	// put the []byte snapshot of store into raft snapshot and return the merged snapshot with
 	// KV readCloser snapshot.
+	// 构建消息
 	snapshot := raftpb.Snapshot{
 		Metadata: raftpb.SnapshotMetadata{
 			Index:     snapi,
@@ -58,13 +64,20 @@ func (s *EtcdServer) createMergedSnapshotMessage(m raftpb.Message, snapt, snapi 
 	}
 	m.Snapshot = snapshot
 
+    // 返回老快照 + 新快照读取器
 	return *snap.NewMessage(m, rc, dbsnap.Size())
 }
 
+// 创建快照读取器
 func newSnapshotReaderCloser(lg *zap.Logger, snapshot backend.Snapshot) io.ReadCloser {
+    // 创建管道
 	pr, pw := io.Pipe()
+
 	go func() {
+	    // 写到管道
 		n, err := snapshot.WriteTo(pw)
+
+        // 日志
 		if err == nil {
 			if lg != nil {
 				lg.Info(
@@ -86,7 +99,11 @@ func newSnapshotReaderCloser(lg *zap.Logger, snapshot backend.Snapshot) io.ReadC
 				plog.Warningf("failed to write database snapshot out [written bytes: %d]: %v", n, err)
 			}
 		}
+
+        // 关闭管道
 		pw.CloseWithError(err)
+
+        // 关闭快照
 		err = snapshot.Close()
 		if err != nil {
 			if lg != nil {
@@ -96,5 +113,6 @@ func newSnapshotReaderCloser(lg *zap.Logger, snapshot backend.Snapshot) io.ReadC
 			}
 		}
 	}()
+
 	return pr
 }

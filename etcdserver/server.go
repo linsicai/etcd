@@ -65,6 +65,7 @@ import (
 )
 
 const (
+    // 默认快照数
 	DefaultSnapshotCount = 100000
 
 	// DefaultSnapshotCatchUpEntries is the number of entries for a slow follower
@@ -72,42 +73,53 @@ const (
 	// We expect the follower has a millisecond level latency with the leader.
 	// The max throughput is around 10K. Keep a 5K entries is enough for helping
 	// follower to catch up.
+	// 追随者使用
 	DefaultSnapshotCatchUpEntries uint64 = 5000
 
+    // 存储前缀
 	StoreClusterPrefix = "/0"
 	StoreKeysPrefix    = "/1"
 
 	// HealthInterval is the minimum time the cluster should be healthy
 	// before accepting add member requests.
+	// 心跳间隔
 	HealthInterval = 5 * time.Second
 
+    // 清除文件间隔
 	purgeFileInterval = 30 * time.Second
+
 	// monitorVersionInterval should be smaller than the timeout
 	// on the connection. Or we will not be able to reuse the connection
 	// (since it will timeout).
+	// 监控版本间隔
 	monitorVersionInterval = rafthttp.ConnWriteTimeout - time.Second
 
 	// max number of in-flight snapshot messages etcdserver allows to have
 	// This number is more than enough for most clusters with 5 machines.
 	maxInFlightMsgSnap = 16
 
+    // 释放延时？
 	releaseDelayAfterSnapshot = 30 * time.Second
 
 	// maxPendingRevokes is the maximum number of outstanding expired lease revocations.
+	// 
 	maxPendingRevokes = 16
 
+    // 推荐最大请求大小，10MB
 	recommendedMaxRequestBytes = 10 * 1024 * 1024
 )
 
 var (
 	plog = capnslog.NewPackageLogger("go.etcd.io/etcd", "etcdserver")
 
+    // 成员属性正则
 	storeMemberAttributeRegexp = regexp.MustCompile(path.Join(membership.StoreMembersPrefix, "[[:xdigit:]]{1,16}", "attributes"))
 )
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
 
+    // 
 	expvar.Publish(
 		"file_descriptor_limit",
 		expvar.Func(
@@ -142,7 +154,9 @@ type ServerV3 interface {
 	RaftStatusGetter
 }
 
-func (s *EtcdServer) ClientCertAuthEnabled() bool { return s.Cfg.ClientCertAuthEnabled }
+func (s *EtcdServer) ClientCertAuthEnabled() bool {
+    return s.Cfg.ClientCertAuthEnabled
+}
 
 type Server interface {
 	// AddMember attempts to add a member into the cluster. It will return
@@ -255,6 +269,7 @@ type EtcdServer struct {
 	// to detect the cluster version immediately.
 	forceVersionC chan struct{}
 
+    // 协程等待
 	// wgMu blocks concurrent waitgroup mutation while server stopping
 	wgMu sync.RWMutex
 	// wg is used to wait for the go routines that depends on the server state
@@ -285,6 +300,7 @@ func NewServer(cfg ServerConfig) (srv *EtcdServer, err error) {
 		cl *membership.RaftCluster
 	)
 
+    // 校验请求大小
 	if cfg.MaxRequestBytes > recommendedMaxRequestBytes {
 		if cfg.Logger != nil {
 			cfg.Logger.Warn(
@@ -299,12 +315,15 @@ func NewServer(cfg ServerConfig) (srv *EtcdServer, err error) {
 		}
 	}
 
+    // 校验数据目录权限
 	if terr := fileutil.TouchDirAll(cfg.DataDir); terr != nil {
 		return nil, fmt.Errorf("cannot access data directory: %v", terr)
 	}
 
+    // 校验是否有wal
 	haveWAL := wal.Exist(cfg.WALDir())
 
+    // 校验快照目录权限
 	if err = fileutil.TouchDirAll(cfg.SnapDir()); err != nil {
 		if cfg.Logger != nil {
 			cfg.Logger.Fatal(
@@ -318,16 +337,19 @@ func NewServer(cfg ServerConfig) (srv *EtcdServer, err error) {
 	}
 	ss := snap.New(cfg.Logger, cfg.SnapDir())
 
+    // 打开后端
 	bepath := cfg.backendPath()
 	beExist := fileutil.Exist(bepath)
 	be := openBackend(cfg)
 
+    // 如若出错，关闭后端
 	defer func() {
 		if err != nil {
 			be.Close()
 		}
 	}()
 
+    // http 处理器？
 	prt, err := rafthttp.NewRoundTripper(cfg.PeerTLSInfo, cfg.peerDialTimeout())
 	if err != nil {
 		return nil, err
@@ -2345,12 +2367,15 @@ func (s *EtcdServer) updateClusterVersion(ver string) {
 	}
 }
 
+// 解析提议错误
 func (s *EtcdServer) parseProposeCtxErr(err error, start time.Time) error {
 	switch err {
 	case context.Canceled:
+	    // 取消
 		return ErrCanceled
 
 	case context.DeadlineExceeded:
+	    // 超时
 		s.leadTimeMu.RLock()
 		curLeadElected := s.leadElectedTime
 		s.leadTimeMu.RUnlock()
@@ -2374,25 +2399,37 @@ func (s *EtcdServer) parseProposeCtxErr(err error, start time.Time) error {
 		return ErrTimeout
 
 	default:
+	    // 默认错误
 		return err
 	}
 }
 
-func (s *EtcdServer) KV() mvcc.ConsistentWatchableKV { return s.kv }
+func (s *EtcdServer) KV() mvcc.ConsistentWatchableKV {
+    return s.kv
+}
 func (s *EtcdServer) Backend() backend.Backend {
 	s.bemu.Lock()
 	defer s.bemu.Unlock()
 	return s.be
 }
 
-func (s *EtcdServer) AuthStore() auth.AuthStore { return s.authStore }
+func (s *EtcdServer) AuthStore() auth.AuthStore {
+    return s.authStore
+}
 
+
+// 告警恢复
 func (s *EtcdServer) restoreAlarms() error {
+    // 新的
 	s.applyV3 = s.newApplierV3()
+
+    // 读取告警
 	as, err := v3alarm.NewAlarmStore(s)
 	if err != nil {
 		return err
 	}
+
+    // 按告警类型恢复
 	s.alarmStore = as
 	if len(as.Get(pb.AlarmType_NOSPACE)) > 0 {
 		s.applyV3 = newApplierV3Capped(s.applyV3)
@@ -2400,6 +2437,7 @@ func (s *EtcdServer) restoreAlarms() error {
 	if len(as.Get(pb.AlarmType_CORRUPT)) > 0 {
 		s.applyV3 = newApplierV3Corrupt(s.applyV3)
 	}
+
 	return nil
 }
 
@@ -2408,6 +2446,8 @@ func (s *EtcdServer) restoreAlarms() error {
 func (s *EtcdServer) goAttach(f func()) {
 	s.wgMu.RLock() // this blocks with ongoing close(s.stopping)
 	defer s.wgMu.RUnlock()
+
+    // 校验一下服务是否退出
 	select {
 	case <-s.stopping:
 		if lg := s.getLogger(); lg != nil {
@@ -2420,6 +2460,7 @@ func (s *EtcdServer) goAttach(f func()) {
 	}
 
 	// now safe to add since waitgroup wait has not started yet
+	// 起协程运行函数
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()

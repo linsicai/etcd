@@ -38,6 +38,7 @@ func (s *EtcdServer) CheckInitialHashKV() error {
 
 	lg := s.getLogger()
 
+    // 开始日志
 	if lg != nil {
 		lg.Info(
 			"starting initial corruption check",
@@ -48,14 +49,19 @@ func (s *EtcdServer) CheckInitialHashKV() error {
 		plog.Infof("%s starting initial corruption check with timeout %v...", s.ID(), s.Cfg.ReqTimeout())
 	}
 
+    // 当前hash
 	h, rev, crev, err := s.kv.HashByRev(0)
 	if err != nil {
 		return fmt.Errorf("%s failed to fetch hash (%v)", s.ID(), err)
 	}
+
+    // 获取对端版本信息
 	peers := s.getPeerHashKVs(rev)
+
 	mismatch := 0
 	for _, p := range peers {
 		if p.resp != nil {
+		    // 获取成功
 			peerID := types.ID(p.resp.Header.MemberId)
 			fields := []zap.Field{
 				zap.String("local-member-id", s.ID().String()),
@@ -70,6 +76,7 @@ func (s *EtcdServer) CheckInitialHashKV() error {
 			}
 
 			if h != p.resp.Hash {
+			    // hash不一样
 				if crev == p.resp.CompactRevision {
 					if lg != nil {
 						lg.Warn("found different hash values from remote peer", fields...)
@@ -89,6 +96,7 @@ func (s *EtcdServer) CheckInitialHashKV() error {
 			continue
 		}
 
+        // 打印出错信息
 		if p.err != nil {
 			switch p.err {
 			case rpctypes.ErrFutureRev:
@@ -124,10 +132,12 @@ func (s *EtcdServer) CheckInitialHashKV() error {
 			}
 		}
 	}
+	// 不一致报错
 	if mismatch > 0 {
 		return fmt.Errorf("%s found data inconsistency with peers", s.ID())
 	}
 
+    // 成功日志
 	if lg != nil {
 		lg.Info(
 			"initial corruption checking passed; no corruption",
@@ -139,12 +149,14 @@ func (s *EtcdServer) CheckInitialHashKV() error {
 	return nil
 }
 
+// 监控
 func (s *EtcdServer) monitorKVHash() {
 	t := s.Cfg.CorruptCheckTime
 	if t == 0 {
 		return
 	}
 
+    // 开始日志
 	lg := s.getLogger()
 	if lg != nil {
 		lg.Info(
@@ -157,14 +169,19 @@ func (s *EtcdServer) monitorKVHash() {
 	}
 
 	for {
+	    // 停止或定时器触发
 		select {
 		case <-s.stopping:
 			return
 		case <-time.After(t):
 		}
+
 		if !s.isLeader() {
+		    // 不是leader，不做事
 			continue
 		}
+
+        // 校验
 		if err := s.checkHashKV(); err != nil {
 			if lg != nil {
 				lg.Warn("failed to check hash KV", zap.Error(err))
@@ -178,12 +195,14 @@ func (s *EtcdServer) monitorKVHash() {
 func (s *EtcdServer) checkHashKV() error {
 	lg := s.getLogger()
 
+    // 获取当前hash，和对端hash
 	h, rev, crev, err := s.kv.HashByRev(0)
 	if err != nil {
 		return err
 	}
 	peers := s.getPeerHashKVs(rev)
 
+    // 创建上下文
 	ctx, cancel := context.WithTimeout(context.Background(), s.Cfg.ReqTimeout())
 	err = s.linearizableReadNotify(ctx)
 	cancel()
@@ -191,6 +210,7 @@ func (s *EtcdServer) checkHashKV() error {
 		return err
 	}
 
+    // 再读
 	h2, rev2, crev2, err := s.kv.HashByRev(0)
 	if err != nil {
 		return err
@@ -212,6 +232,7 @@ func (s *EtcdServer) checkHashKV() error {
 		})
 	}
 
+    // 检测
 	if h2 != h && rev2 == rev && crev == crev2 {
 		if lg != nil {
 			lg.Warn(
@@ -229,6 +250,7 @@ func (s *EtcdServer) checkHashKV() error {
 		mismatch(uint64(s.ID()))
 	}
 
+    // 遍历对端，检测
 	for _, p := range peers {
 		if p.resp == nil {
 			continue
@@ -301,8 +323,8 @@ func (s *EtcdServer) checkHashKV() error {
 }
 
 type peerHashKVResp struct {
-	id  types.ID
-	eps []string
+	id  types.ID // id
+	eps []string // 节点访问点
 
 	resp *clientv3.HashKVResponse
 	err  error
@@ -311,6 +333,7 @@ type peerHashKVResp struct {
 func (s *EtcdServer) getPeerHashKVs(rev int64) (resps []*peerHashKVResp) {
 	// TODO: handle the case when "s.cluster.Members" have not
 	// been populated (e.g. no snapshot to load from disk)
+	// 遍历成员，构建
 	mbs := s.cluster.Members()
 	pss := make([]peerHashKVResp, len(mbs))
 	for _, m := range mbs {
@@ -322,15 +345,18 @@ func (s *EtcdServer) getPeerHashKVs(rev int64) (resps []*peerHashKVResp) {
 
 	lg := s.getLogger()
 
+    // 遍历所有成员
 	for _, p := range pss {
 		if len(p.eps) == 0 {
 			continue
 		}
+		// 客户端
 		cli, cerr := clientv3.New(clientv3.Config{
 			DialTimeout: s.Cfg.ReqTimeout(),
 			Endpoints:   p.eps,
 		})
 		if cerr != nil {
+		    // 出错了
 			if lg != nil {
 				lg.Warn(
 					"failed to create client to peer URL",
@@ -345,16 +371,20 @@ func (s *EtcdServer) getPeerHashKVs(rev int64) (resps []*peerHashKVResp) {
 			continue
 		}
 
+        // 遍历所有接入点
 		respsLen := len(resps)
 		for _, c := range cli.Endpoints() {
+		    // 创建上下文，走rpc
 			ctx, cancel := context.WithTimeout(context.Background(), s.Cfg.ReqTimeout())
 			var resp *clientv3.HashKVResponse
 			resp, cerr = cli.HashKV(ctx, c, rev)
 			cancel()
 			if cerr == nil {
+			    // 成功了
 				resps = append(resps, &peerHashKVResp{id: p.id, eps: p.eps, resp: resp, err: nil})
 				break
 			}
+			// 错误日志
 			if lg != nil {
 				lg.Warn(
 					"failed hash kv request",
@@ -367,45 +397,43 @@ func (s *EtcdServer) getPeerHashKVs(rev int64) (resps []*peerHashKVResp) {
 				plog.Warningf("%s hash-kv error %q on peer %q with revision %d", s.ID(), cerr.Error(), c, rev)
 			}
 		}
+
+        // 关闭客户端
 		cli.Close()
 
 		if respsLen == len(resps) {
 			resps = append(resps, &peerHashKVResp{id: p.id, eps: p.eps, resp: nil, err: cerr})
 		}
 	}
+
 	return resps
 }
 
+// 损坏的处理器
 type applierV3Corrupt struct {
 	applierV3
 }
-
-func newApplierV3Corrupt(a applierV3) *applierV3Corrupt { return &applierV3Corrupt{a} }
-
+func newApplierV3Corrupt(a applierV3) *applierV3Corrupt {
+    return &applierV3Corrupt{a}
+}
 func (a *applierV3Corrupt) Put(txn mvcc.TxnWrite, p *pb.PutRequest) (*pb.PutResponse, error) {
 	return nil, ErrCorrupt
 }
-
 func (a *applierV3Corrupt) Range(txn mvcc.TxnRead, p *pb.RangeRequest) (*pb.RangeResponse, error) {
 	return nil, ErrCorrupt
 }
-
 func (a *applierV3Corrupt) DeleteRange(txn mvcc.TxnWrite, p *pb.DeleteRangeRequest) (*pb.DeleteRangeResponse, error) {
 	return nil, ErrCorrupt
 }
-
 func (a *applierV3Corrupt) Txn(rt *pb.TxnRequest) (*pb.TxnResponse, error) {
 	return nil, ErrCorrupt
 }
-
 func (a *applierV3Corrupt) Compaction(compaction *pb.CompactionRequest) (*pb.CompactionResponse, <-chan struct{}, error) {
 	return nil, nil, ErrCorrupt
 }
-
 func (a *applierV3Corrupt) LeaseGrant(lc *pb.LeaseGrantRequest) (*pb.LeaseGrantResponse, error) {
 	return nil, ErrCorrupt
 }
-
 func (a *applierV3Corrupt) LeaseRevoke(lc *pb.LeaseRevokeRequest) (*pb.LeaseRevokeResponse, error) {
 	return nil, ErrCorrupt
 }

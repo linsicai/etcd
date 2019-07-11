@@ -20,6 +20,7 @@ import (
 )
 
 var (
+    // 错误列表
 	ErrUnknownMethod              = errors.New("etcdserver: unknown method")
 	ErrStopped                    = errors.New("etcdserver: server stopped")
 	ErrCanceled                   = errors.New("etcdserver: request cancelled")
@@ -39,6 +40,7 @@ var (
 	ErrCorrupt                    = errors.New("etcdserver: corrupt cluster")
 )
 
+// 发现错误
 type DiscoveryError struct {
 	Op  string
 	Err error

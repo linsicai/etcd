@@ -28,21 +28,29 @@ import (
 	"go.uber.org/zap"
 )
 
+// 存储接口
 type Storage interface {
 	// Save function saves ents and state to the underlying stable storage.
 	// Save MUST block until st and ents are on stable storage.
+	// 保存
 	Save(st raftpb.HardState, ents []raftpb.Entry) error
+
 	// SaveSnap function saves snapshot to the underlying stable storage.
+	// 保存快照
 	SaveSnap(snap raftpb.Snapshot) error
+
 	// Close closes the Storage and performs finalization.
+	// 关闭
 	Close() error
 }
 
 type storage struct {
-	*wal.WAL
-	*snap.Snapshotter
+	*wal.WAL // 日志
+
+	*snap.Snapshotter // 快照
 }
 
+// 新建
 func NewStorage(w *wal.WAL, s *snap.Snapshotter) Storage {
 	return &storage{w, s}
 }
@@ -50,18 +58,25 @@ func NewStorage(w *wal.WAL, s *snap.Snapshotter) Storage {
 // SaveSnap saves the snapshot to disk and release the locked
 // wal files since they will not be used.
 func (st *storage) SaveSnap(snap raftpb.Snapshot) error {
+    // 构建 wal日志项
 	walsnap := walpb.Snapshot{
 		Index: snap.Metadata.Index,
 		Term:  snap.Metadata.Term,
 	}
+
+    // 写wal 日志
 	err := st.WAL.SaveSnapshot(walsnap)
 	if err != nil {
 		return err
 	}
+
+    // 写快照
 	err = st.Snapshotter.SaveSnap(snap)
 	if err != nil {
 		return err
 	}
+
+    // wal 解锁
 	return st.WAL.ReleaseLockTo(snap.Metadata.Index)
 }
 
@@ -73,6 +88,7 @@ func readWAL(lg *zap.Logger, waldir string, snap walpb.Snapshot) (w *wal.WAL, id
 
 	repaired := false
 	for {
+	    // 打开wal
 		if w, err = wal.Open(lg, waldir, snap); err != nil {
 			if lg != nil {
 				lg.Fatal("failed to open WAL", zap.Error(err))
@@ -80,16 +96,23 @@ func readWAL(lg *zap.Logger, waldir string, snap walpb.Snapshot) (w *wal.WAL, id
 				plog.Fatalf("open wal error: %v", err)
 			}
 		}
+
+        // 读取元信息
 		if wmetadata, st, ents, err = w.ReadAll(); err != nil {
+		    // 读取失败
 			w.Close()
+
 			// we can only repair ErrUnexpectedEOF and we never repair twice.
 			if repaired || err != io.ErrUnexpectedEOF {
+			    // 修复过了，而且不能修复
 				if lg != nil {
 					lg.Fatal("failed to read WAL, cannot be repaired", zap.Error(err))
 				} else {
 					plog.Fatalf("read wal error (%v) and cannot be repaired", err)
 				}
 			}
+	
+	        // 修复
 			if !wal.Repair(lg, waldir) {
 				if lg != nil {
 					lg.Fatal("failed to repair WAL", zap.Error(err))
@@ -104,12 +127,20 @@ func readWAL(lg *zap.Logger, waldir string, snap walpb.Snapshot) (w *wal.WAL, id
 				}
 				repaired = true
 			}
+	
+	        // 修复成功后，继续
 			continue
 		}
+
+        // 结束
 		break
 	}
+
+    // 反序列化数据
 	var metadata pb.Metadata
 	pbutil.MustUnmarshal(&metadata, wmetadata)
+
+    // 结构转换
 	id = types.ID(metadata.NodeID)
 	cid = types.ID(metadata.ClusterID)
 	return w, id, cid, st, ents

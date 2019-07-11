@@ -40,12 +40,15 @@ import (
 const (
 	// The max throughput of etcd will not exceed 100MB/s (100K * 1KB value).
 	// Assuming the RTT is around 10ms, 1MB max size is large enough.
+	// 吞吐量不超过100MB/s，假设rtt为10ms即100/秒，得1MB
 	maxSizePerMsg = 1 * 1024 * 1024
+
 	// Never overflow the rafthttp buffer, which is 4096.
 	// TODO: a better const?
 	maxInflightMsgs = 4096 / 8
 )
 
+// raft 状态
 var (
 	// protects raftStatus
 	raftStatusMu sync.Mutex
@@ -58,6 +61,7 @@ var (
 )
 
 func init() {
+    // 初始化日志
 	lcfg := &zap.Config{
 		Level:       zap.NewAtomicLevelAt(zap.InfoLevel),
 		Development: false,

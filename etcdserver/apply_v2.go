@@ -29,6 +29,7 @@ import (
 )
 
 // ApplierV2 is the interface for processing V2 raft messages
+// 申请者接口
 type ApplierV2 interface {
 	Delete(r *RequestV2) Response
 	Post(r *RequestV2) Response
@@ -42,40 +43,54 @@ func NewApplierV2(lg *zap.Logger, s v2store.Store, c *membership.RaftCluster) Ap
 }
 
 type applierV2store struct {
-	lg      *zap.Logger
-	store   v2store.Store
-	cluster *membership.RaftCluster
+	lg      *zap.Logger // 日志
+
+	store   v2store.Store // 存储
+
+	cluster *membership.RaftCluster // 集群
 }
 
 func (a *applierV2store) Delete(r *RequestV2) Response {
 	switch {
 	case r.PrevIndex > 0 || r.PrevValue != "":
+	    // cas 删除
 		return toResponse(a.store.CompareAndDelete(r.Path, r.PrevValue, r.PrevIndex))
 	default:
+	    // 默认删除指定路径
 		return toResponse(a.store.Delete(r.Path, r.Dir, r.Recursive))
 	}
 }
 
 func (a *applierV2store) Post(r *RequestV2) Response {
+    // 创建
 	return toResponse(a.store.Create(r.Path, r.Dir, r.Val, true, r.TTLOptions()))
 }
 
 func (a *applierV2store) Put(r *RequestV2) Response {
 	ttlOptions := r.TTLOptions()
+
 	exists, existsSet := pbutil.GetBool(r.PrevExist)
 	switch {
 	case existsSet:
+	    // 确认有老值
 		if exists {
 			if r.PrevIndex == 0 && r.PrevValue == "" {
+			    // 覆盖写
 				return toResponse(a.store.Update(r.Path, r.Val, ttlOptions))
 			}
+			// 比较写
 			return toResponse(a.store.CompareAndSwap(r.Path, r.PrevValue, r.PrevIndex, r.Val, ttlOptions))
 		}
 		return toResponse(a.store.Create(r.Path, r.Dir, r.Val, false, ttlOptions))
 	case r.PrevIndex > 0 || r.PrevValue != "":
+	    // 比较写
 		return toResponse(a.store.CompareAndSwap(r.Path, r.PrevValue, r.PrevIndex, r.Val, ttlOptions))
 	default:
+	    // 默认处理
 		if storeMemberAttributeRegexp.MatchString(r.Path) {
+		    // 设置成员属性
+
+            // 解析id，反序列化值
 			id := membership.MustParseMemberIDFromKey(path.Dir(r.Path))
 			var attr membership.Attributes
 			if err := json.Unmarshal([]byte(r.Val), &attr); err != nil {
@@ -85,28 +100,35 @@ func (a *applierV2store) Put(r *RequestV2) Response {
 					plog.Panicf("unmarshal %s should never fail: %v", r.Val, err)
 				}
 			}
+			// 更新集群成员属性
 			if a.cluster != nil {
 				a.cluster.UpdateAttributes(id, attr)
 			}
 			// return an empty response since there is no consumer.
 			return Response{}
 		}
+
 		if r.Path == membership.StoreClusterVersionKey() {
+		    // 设置集群版本
 			if a.cluster != nil {
 				a.cluster.SetVersion(semver.Must(semver.NewVersion(r.Val)), api.UpdateCapability)
 			}
 			// return an empty response since there is no consumer.
 			return Response{}
 		}
+
+		// 设置操作
 		return toResponse(a.store.Set(r.Path, r.Dir, r.Val, ttlOptions))
 	}
 }
 
 func (a *applierV2store) QGet(r *RequestV2) Response {
+    // 获取
 	return toResponse(a.store.Get(r.Path, r.Recursive, r.Sorted))
 }
 
 func (a *applierV2store) Sync(r *RequestV2) Response {
+    // 删除过期数据
 	a.store.DeleteExpiredKeys(time.Unix(0, r.Time))
 	return Response{}
 }
@@ -116,6 +138,7 @@ func (a *applierV2store) Sync(r *RequestV2) Response {
 func (s *EtcdServer) applyV2Request(r *RequestV2) Response {
 	defer warnOfExpensiveRequest(s.getLogger(), time.Now(), r, nil, nil)
 
+    // 分配任务
 	switch r.Method {
 	case "POST":
 		return s.applyV2.Post(r)
@@ -133,6 +156,7 @@ func (s *EtcdServer) applyV2Request(r *RequestV2) Response {
 	}
 }
 
+// ttl 选项
 func (r *RequestV2) TTLOptions() v2store.TTLOptionSet {
 	refresh, _ := pbutil.GetBool(r.Refresh)
 	ttlOptions := v2store.TTLOptionSet{Refresh: refresh}

@@ -22,6 +22,7 @@ import (
 // It implements the mvcc.ConsistentIndexGetter interface.
 // It is always set to the offset of current entry before executing the entry,
 // so ConsistentWatchableKV could get the consistent index from it.
+// 一致性索引
 type consistentIndex uint64
 
 func (i *consistentIndex) setConsistentIndex(v uint64) {

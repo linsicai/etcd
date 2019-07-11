@@ -19,6 +19,7 @@ import "context"
 // TODO: remove this when "FailFast=false" is fixed.
 // See https://github.com/grpc/grpc-go/issues/1532.
 func readyWait(rpcCtx, clientCtx context.Context, ready <-chan struct{}) error {
+    // 等待可以，或者上下文出错
 	select {
 	case <-ready:
 		return nil

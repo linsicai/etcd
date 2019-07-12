@@ -42,48 +42,65 @@ import (
 
 // RaftCluster is a list of Members that belong to the same raft cluster
 type RaftCluster struct {
-	lg *zap.Logger
+	lg *zap.Logger // 日志
 
-	localID types.ID
-	cid     types.ID
-	token   string
+	localID types.ID // 本机ID
+	cid     types.ID // 集群ID
+	token   string   // TOKEN
 
-	v2store v2store.Store
-	be      backend.Backend
+	v2store v2store.Store   // 存储层
+	be      backend.Backend // 后端
 
-	sync.Mutex // guards the fields below
-	version    *semver.Version
-	members    map[types.ID]*Member
+	sync.Mutex                      // 锁，guards the fields below
+	version    *semver.Version      // 服务版本
+	members    map[types.ID]*Member // 成员映射表
+	removed    map[types.ID]bool    // 已删除成员
 	// removed contains the ids of removed members in the cluster.
 	// removed id cannot be reused.
-	removed map[types.ID]bool
 }
 
 func NewClusterFromURLsMap(lg *zap.Logger, token string, urlsmap types.URLsMap) (*RaftCluster, error) {
+	// new 集群
 	c := NewCluster(lg, token)
+
+	// 遍历url map，构建成员
 	for name, urls := range urlsmap {
+		// new 成员
 		m := NewMember(name, urls, token, nil)
 		if _, ok := c.members[m.ID]; ok {
+			// ID 冲突，创建失败
 			return nil, fmt.Errorf("member exists with identical ID %v", m)
 		}
+
 		if uint64(m.ID) == raft.None {
+			// 异常ID，创建失败
 			return nil, fmt.Errorf("cannot use %x as member id", raft.None)
 		}
+
+		// 新成员
 		c.members[m.ID] = m
 	}
+
+	// 生成集群ID
 	c.genID()
+
 	return c, nil
 }
 
 func NewClusterFromMembers(lg *zap.Logger, token string, id types.ID, membs []*Member) *RaftCluster {
+	// new 集群
 	c := NewCluster(lg, token)
+
+	// 指定ID 和成员
 	c.cid = id
 	for _, m := range membs {
 		c.members[m.ID] = m
 	}
+
 	return c
 }
 
+// 集群构造函数
 func NewCluster(lg *zap.Logger, token string) *RaftCluster {
 	return &RaftCluster{
 		lg:      lg,
@@ -93,22 +110,30 @@ func NewCluster(lg *zap.Logger, token string) *RaftCluster {
 	}
 }
 
-func (c *RaftCluster) ID() types.ID { return c.cid }
+// 返回集群ID
+func (c *RaftCluster) ID() types.ID {
+	return c.cid
+}
 
+// 获取按ID排序的成员列表
 func (c *RaftCluster) Members() []*Member {
 	c.Lock()
 	defer c.Unlock()
+
 	var ms MembersByID
 	for _, m := range c.members {
 		ms = append(ms, m.Clone())
 	}
 	sort.Sort(ms)
+
 	return []*Member(ms)
 }
 
+// 获取成员
 func (c *RaftCluster) Member(id types.ID) *Member {
 	c.Lock()
 	defer c.Unlock()
+
 	return c.members[id].Clone()
 }
 
@@ -117,9 +142,11 @@ func (c *RaftCluster) Member(id types.ID) *Member {
 func (c *RaftCluster) MemberByName(name string) *Member {
 	c.Lock()
 	defer c.Unlock()
+
 	var memb *Member
 	for _, m := range c.members {
 		if m.Name == name {
+			// 重名告警
 			if memb != nil {
 				if c.lg != nil {
 					c.lg.Panic("two member with same name found", zap.String("name", name))
@@ -127,75 +154,101 @@ func (c *RaftCluster) MemberByName(name string) *Member {
 					plog.Panicf("two members with the given name %q exist", name)
 				}
 			}
-			memb = m
+
+			memb = m // 取最新的
 		}
 	}
+
 	return memb.Clone()
 }
 
+// 获取按ID 排序的ID 列表
 func (c *RaftCluster) MemberIDs() []types.ID {
 	c.Lock()
 	defer c.Unlock()
+
 	var ids []types.ID
 	for _, m := range c.members {
 		ids = append(ids, m.ID)
 	}
 	sort.Sort(types.IDSlice(ids))
+
 	return ids
 }
 
+// ID 是否已删除
 func (c *RaftCluster) IsIDRemoved(id types.ID) bool {
 	c.Lock()
 	defer c.Unlock()
+
 	return c.removed[id]
 }
 
 // PeerURLs returns a list of all peer addresses.
 // The returned list is sorted in ascending lexicographical order.
+// 获取所有对侧URL
 func (c *RaftCluster) PeerURLs() []string {
 	c.Lock()
 	defer c.Unlock()
+
 	urls := make([]string, 0)
 	for _, p := range c.members {
 		urls = append(urls, p.PeerURLs...)
 	}
 	sort.Strings(urls)
+
 	return urls
 }
 
 // ClientURLs returns a list of all client addresses.
 // The returned list is sorted in ascending lexicographical order.
+// 获取所有客户端地址
 func (c *RaftCluster) ClientURLs() []string {
 	c.Lock()
 	defer c.Unlock()
+
 	urls := make([]string, 0)
 	for _, p := range c.members {
 		urls = append(urls, p.ClientURLs...)
 	}
 	sort.Strings(urls)
+
 	return urls
 }
 
+// 获取集群状态
 func (c *RaftCluster) String() string {
 	c.Lock()
 	defer c.Unlock()
+
+	// buffer
 	b := &bytes.Buffer{}
+
+	// 集群ID
 	fmt.Fprintf(b, "{ClusterID:%s ", c.cid)
+
+	// 成员列表
 	var ms []string
 	for _, m := range c.members {
 		ms = append(ms, fmt.Sprintf("%+v", m))
 	}
 	fmt.Fprintf(b, "Members:[%s] ", strings.Join(ms, " "))
+
+	// 已删除成员ID
 	var ids []string
 	for id := range c.removed {
 		ids = append(ids, id.String())
 	}
 	fmt.Fprintf(b, "RemovedMemberIDs:[%s]}", strings.Join(ids, " "))
+
 	return b.String()
 }
 
 func (c *RaftCluster) genID() {
+	// 获取成员ID 列表
 	mIDs := c.MemberIDs()
+
+	// 计算sha1，取前8位
 	b := make([]byte, 8*len(mIDs))
 	for i, id := range mIDs {
 		binary.BigEndian.PutUint64(b[8*i:], uint64(id))
@@ -204,18 +257,24 @@ func (c *RaftCluster) genID() {
 	c.cid = types.ID(binary.BigEndian.Uint64(hash[:8]))
 }
 
+// 设置集群ID
 func (c *RaftCluster) SetID(localID, cid types.ID) {
 	c.localID = localID
 	c.cid = cid
 }
 
-func (c *RaftCluster) SetStore(st v2store.Store) { c.v2store = st }
+// 设置存储
+func (c *RaftCluster) SetStore(st v2store.Store) {
+	c.v2store = st
+}
 
+// 设置后端
 func (c *RaftCluster) SetBackend(be backend.Backend) {
 	c.be = be
 	mustCreateBackendBuckets(c.be)
 }
 
+// TODO
 func (c *RaftCluster) Recover(onSet func(*zap.Logger, *semver.Version)) {
 	c.Lock()
 	defer c.Unlock()
@@ -331,6 +390,7 @@ func (c *RaftCluster) ValidateConfigurationChange(cc raftpb.ConfChange) error {
 func (c *RaftCluster) AddMember(m *Member) {
 	c.Lock()
 	defer c.Unlock()
+
 	if c.v2store != nil {
 		mustSaveMemberToStore(c.v2store, m)
 	}
@@ -546,9 +606,10 @@ func (c *RaftCluster) IsReadyToAddNewMember() bool {
 	return true
 }
 
+// 是否可以删除成员
 func (c *RaftCluster) IsReadyToRemoveMember(id uint64) bool {
-	nmembers := 0
-	nstarted := 0
+	nmembers := 0 // 成员数
+	nstarted := 0 // 启动成员数
 
 	for _, member := range c.members {
 		if uint64(member.ID) == id {
@@ -580,9 +641,12 @@ func (c *RaftCluster) IsReadyToRemoveMember(id uint64) bool {
 	return true
 }
 
+// 从v2 存储中获取成员
 func membersFromStore(lg *zap.Logger, st v2store.Store) (map[types.ID]*Member, map[types.ID]bool) {
 	members := make(map[types.ID]*Member)
 	removed := make(map[types.ID]bool)
+
+	// 读取节点
 	e, err := st.Get(StoreMembersPrefix, true, true)
 	if err != nil {
 		if isKeyNotFound(err) {
@@ -594,6 +658,8 @@ func membersFromStore(lg *zap.Logger, st v2store.Store) (map[types.ID]*Member, m
 			plog.Panicf("get storeMembers should never fail: %v", err)
 		}
 	}
+
+	// 遍历节点，构建成员
 	for _, n := range e.Node.Nodes {
 		var m *Member
 		m, err = nodeToMember(n)
@@ -607,6 +673,7 @@ func membersFromStore(lg *zap.Logger, st v2store.Store) (map[types.ID]*Member, m
 		members[m.ID] = m
 	}
 
+	// 读取已删除成员
 	e, err = st.Get(storeRemovedMembersPrefix, true, true)
 	if err != nil {
 		if isKeyNotFound(err) {
@@ -625,15 +692,24 @@ func membersFromStore(lg *zap.Logger, st v2store.Store) (map[types.ID]*Member, m
 	for _, n := range e.Node.Nodes {
 		removed[MustParseMemberIDFromKey(n.Key)] = true
 	}
+
 	return members, removed
 }
 
+// 从v2 存储中读取集群版本
 func clusterVersionFromStore(lg *zap.Logger, st v2store.Store) *semver.Version {
+	// 读取版本
 	e, err := st.Get(path.Join(storePrefix, "version"), false, false)
+
 	if err != nil {
+		// 出错
+
+		// 没有存储
 		if isKeyNotFound(err) {
 			return nil
 		}
+
+		// 报错
 		if lg != nil {
 			lg.Panic(
 				"failed to get cluster version from store",
@@ -644,6 +720,8 @@ func clusterVersionFromStore(lg *zap.Logger, st v2store.Store) *semver.Version {
 			plog.Panicf("unexpected error (%v) when getting cluster version from store", err)
 		}
 	}
+
+	// 构建版本
 	return semver.Must(semver.NewVersion(*e.Node.Value))
 }
 
@@ -651,7 +729,9 @@ func clusterVersionFromStore(lg *zap.Logger, st v2store.Store) *semver.Version {
 // with the existing cluster. If the validation succeeds, it assigns the IDs
 // from the existing cluster to the local cluster.
 // If the validation fails, an error will be returned.
+// 验证集群
 func ValidateClusterAndAssignIDs(lg *zap.Logger, local *RaftCluster, existing *RaftCluster) error {
+	// 获取对侧成员
 	ems := existing.Members()
 	lms := local.Members()
 	if len(ems) != len(lms) {
@@ -660,26 +740,38 @@ func ValidateClusterAndAssignIDs(lg *zap.Logger, local *RaftCluster, existing *R
 	sort.Sort(MembersByPeerURLs(ems))
 	sort.Sort(MembersByPeerURLs(lms))
 
+	// 创建30秒超时的上下文
 	ctx, cancel := context.WithTimeout(context.TODO(), 30*time.Second)
 	defer cancel()
+
+	// 校验每一个URL
 	for i := range ems {
 		if ok, err := netutil.URLStringsEqual(ctx, lg, ems[i].PeerURLs, lms[i].PeerURLs); !ok {
 			return fmt.Errorf("unmatched member while checking PeerURLs (%v)", err)
 		}
 		lms[i].ID = ems[i].ID
 	}
+
+	// 本地成员赋值
 	local.members = make(map[types.ID]*Member)
 	for _, m := range lms {
 		local.members[m.ID] = m
 	}
+
 	return nil
 }
 
+// 向下兼容性检测
 func mustDetectDowngrade(lg *zap.Logger, cv *semver.Version) {
+	// 获取当前版本
 	lv := semver.Must(semver.NewVersion(version.Version))
+
 	// only keep major.minor version for comparison against cluster version
+	// 只保留major 和 minor
 	lv = &semver.Version{Major: lv.Major, Minor: lv.Minor}
+
 	if cv != nil && lv.LessThan(*cv) {
+		// 代码版本服务不起当前版本，报错
 		if lg != nil {
 			lg.Fatal(
 				"invalid downgrade; server version is lower than determined cluster version",

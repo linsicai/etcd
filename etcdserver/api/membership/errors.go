@@ -21,12 +21,16 @@ import (
 )
 
 var (
-	ErrIDRemoved     = errors.New("membership: ID removed")
-	ErrIDExists      = errors.New("membership: ID exists")
-	ErrIDNotFound    = errors.New("membership: ID not found")
+	// 成员ID 错误
+	ErrIDRemoved  = errors.New("membership: ID removed")
+	ErrIDExists   = errors.New("membership: ID exists")
+	ErrIDNotFound = errors.New("membership: ID not found")
+
+	// 对端URL 已存在
 	ErrPeerURLexists = errors.New("membership: peerURL exists")
 )
 
+// key 没有找到
 func isKeyNotFound(err error) bool {
 	e, ok := err.(*v2error.Error)
 	return ok && e.ErrorCode == v2error.EcodeKeyNotFound

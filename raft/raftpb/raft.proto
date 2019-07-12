@@ -16,6 +16,7 @@ enum EntryType {
 	EntryConfChange = 1;
 }
 
+// 实体：任期、序号、类型、数据
 message Entry {
 	optional uint64     Term  = 2 [(gogoproto.nullable) = false]; // must be 64-bit aligned for atomic operations
 	optional uint64     Index = 3 [(gogoproto.nullable) = false]; // must be 64-bit aligned for atomic operations
@@ -23,17 +24,20 @@ message Entry {
 	optional bytes      Data  = 4;
 }
 
+// 元信息：节点信息、任期、序号
 message SnapshotMetadata {
 	optional ConfState conf_state = 1 [(gogoproto.nullable) = false];
 	optional uint64    index      = 2 [(gogoproto.nullable) = false];
 	optional uint64    term       = 3 [(gogoproto.nullable) = false];
 }
 
+// 快照：数据、元信息
 message Snapshot {
 	optional bytes            data     = 1;
 	optional SnapshotMetadata metadata = 2 [(gogoproto.nullable) = false];
 }
 
+// 信息类型
 enum MessageType {
 	MsgHup             = 0;
 	MsgBeat            = 1;
@@ -56,6 +60,7 @@ enum MessageType {
 	MsgPreVoteResp     = 18;
 }
 
+// 信息
 message Message {
 	optional MessageType type        = 1  [(gogoproto.nullable) = false];
 	optional uint64      to          = 2  [(gogoproto.nullable) = false];
@@ -71,24 +76,28 @@ message Message {
 	optional bytes       context     = 12;
 }
 
+// 硬件状态：任期、投票、提交
 message HardState {
 	optional uint64 term   = 1 [(gogoproto.nullable) = false];
 	optional uint64 vote   = 2 [(gogoproto.nullable) = false];
 	optional uint64 commit = 3 [(gogoproto.nullable) = false];
 }
 
+// 配置状态
 message ConfState {
-	repeated uint64 nodes    = 1;
-	repeated uint64 learners = 2;
+	repeated uint64 nodes    = 1; // 节点列表
+	repeated uint64 learners = 2; // 学习者列表
 }
 
+// 配置变更类型
 enum ConfChangeType {
-	ConfChangeAddNode        = 0;
-	ConfChangeRemoveNode     = 1;
-	ConfChangeUpdateNode     = 2;
-	ConfChangeAddLearnerNode = 3;
+	ConfChangeAddNode        = 0; // 增加节点
+	ConfChangeRemoveNode     = 1; // 删除节点
+	ConfChangeUpdateNode     = 2; // 更新节点
+	ConfChangeAddLearnerNode = 3; // 增加学习者
 }
 
+// 配置变更：id、类型、节点、上下文
 message ConfChange {
 	optional uint64          ID      = 1 [(gogoproto.nullable) = false];
 	optional ConfChangeType  Type    = 2 [(gogoproto.nullable) = false];

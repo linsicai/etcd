@@ -81,9 +81,11 @@ func init() {
 	}
 	raft.SetLogger(lg)
 
+    // 发布公共函数变量
 	expvar.Publish("raft.status", expvar.Func(func() interface{} {
 		raftStatusMu.Lock()
 		defer raftStatusMu.Unlock()
+
 		return raftStatus()
 	}))
 }
@@ -95,6 +97,7 @@ func init() {
 type apply struct {
 	entries  []raftpb.Entry
 	snapshot raftpb.Snapshot
+
 	// notifyc synchronizes etcd server applies with the raft node
 	notifyc chan struct{}
 }
@@ -103,35 +106,52 @@ type raftNode struct {
 	lg *zap.Logger
 
 	tickMu *sync.Mutex
+
+	// 节点配置
 	raftNodeConfig
 
 	// a chan to send/receive snapshot
+	// 快照通道
 	msgSnapC chan raftpb.Message
 
 	// a chan to send out apply
+	// 申请通道
 	applyc chan apply
 
 	// a chan to send out readState
+	// 读状态通道
 	readStateC chan raft.ReadState
 
 	// utility
 	ticker *time.Ticker
+
 	// contention detectors for raft heartbeat message
 	td *contention.TimeoutDetector
 
+    // 停止结束信号
 	stopped chan struct{}
 	done    chan struct{}
 }
 
+// 节点配置
 type raftNodeConfig struct {
 	lg *zap.Logger
 
 	// to check if msg receiver is removed from cluster
+	// 节点已经删除？
 	isIDRemoved func(id uint64) bool
+
+    // 节点信息
 	raft.Node
+
+    // 存储
 	raftStorage *raft.MemoryStorage
 	storage     Storage
+
+    // 心跳间隔
 	heartbeat   time.Duration // for logging
+
+
 	// transport specifies the transport to send and receive msgs to members.
 	// Sending messages MUST NOT block. It is okay to drop messages, since
 	// clients should timeout and reissue their messages.
@@ -153,11 +173,14 @@ func newRaftNode(cfg raftNodeConfig) *raftNode {
 		stopped:    make(chan struct{}),
 		done:       make(chan struct{}),
 	}
+
+    // 创建定时器
 	if r.heartbeat == 0 {
 		r.ticker = &time.Ticker{}
 	} else {
 		r.ticker = time.NewTicker(r.heartbeat)
 	}
+
 	return r
 }
 
@@ -170,6 +193,7 @@ func (r *raftNode) tick() {
 
 // start prepares and starts raftNode in a new goroutine. It is no longer safe
 // to modify the fields after it has been started.
+// 启动节点
 func (r *raftNode) start(rh *raftReadyHandler) {
 	internalTimeout := time.Second
 
@@ -180,20 +204,27 @@ func (r *raftNode) start(rh *raftReadyHandler) {
 		for {
 			select {
 			case <-r.ticker.C:
+			    // 定时器触发
 				r.tick()
 			case rd := <-r.Ready():
+			    // 状态变更
 				if rd.SoftState != nil {
+				    // 软状态？
+
+					// 检测leader 变更
 					newLeader := rd.SoftState.Lead != raft.None && rh.getLead() != rd.SoftState.Lead
 					if newLeader {
 						leaderChanges.Inc()
 					}
 
+					// 监控是否有leader
 					if rd.SoftState.Lead == raft.None {
 						hasLeader.Set(0)
 					} else {
 						hasLeader.Set(1)
 					}
 
+					// 更新leader 与监控
 					rh.updateLead(rd.SoftState.Lead)
 					islead = rd.RaftState == raft.StateLeader
 					if islead {
@@ -201,10 +232,13 @@ func (r *raftNode) start(rh *raftReadyHandler) {
 					} else {
 						isLeader.Set(0)
 					}
+
+					// 重置状态
 					rh.updateLeadership(newLeader)
 					r.td.Reset()
 				}
 
+				// 有状态可以读，转发或超时或退出
 				if len(rd.ReadStates) != 0 {
 					select {
 					case r.readStateC <- rd.ReadStates[len(rd.ReadStates)-1]:
@@ -219,15 +253,14 @@ func (r *raftNode) start(rh *raftReadyHandler) {
 					}
 				}
 
+				// 更新提交索引
 				notifyc := make(chan struct{}, 1)
 				ap := apply{
 					entries:  rd.CommittedEntries,
 					snapshot: rd.Snapshot,
 					notifyc:  notifyc,
 				}
-
 				updateCommittedIndex(&ap, rh)
-
 				select {
 				case r.applyc <- ap:
 				case <-r.stopped:
@@ -237,12 +270,14 @@ func (r *raftNode) start(rh *raftReadyHandler) {
 				// the leader can write to its disk in parallel with replicating to the followers and them
 				// writing to their disks.
 				// For more details, check raft thesis 10.2.1
+				// leader 要发送消息
 				if islead {
 					// gofail: var raftBeforeLeaderSend struct{}
 					r.transport.Send(r.processMessages(rd.Messages))
 				}
 
 				// gofail: var raftBeforeSave struct{}
+				// 存储硬件状态
 				if err := r.storage.Save(rd.HardState, rd.Entries); err != nil {
 					if r.lg != nil {
 						r.lg.Fatal("failed to save Raft hard state and entries", zap.Error(err))
@@ -255,8 +290,10 @@ func (r *raftNode) start(rh *raftReadyHandler) {
 				}
 				// gofail: var raftAfterSave struct{}
 
+				// 快照处理
 				if !raft.IsEmptySnap(rd.Snapshot) {
 					// gofail: var raftBeforeSaveSnap struct{}
+					// 存储快照
 					if err := r.storage.SaveSnap(rd.Snapshot); err != nil {
 						if r.lg != nil {
 							r.lg.Fatal("failed to save Raft snapshot", zap.Error(err))
@@ -268,6 +305,7 @@ func (r *raftNode) start(rh *raftReadyHandler) {
 					notifyc <- struct{}{}
 
 					// gofail: var raftAfterSaveSnap struct{}
+					// 发布快照更新
 					r.raftStorage.ApplySnapshot(rd.Snapshot)
 					if r.lg != nil {
 						r.lg.Info("applied incoming Raft snapshot", zap.Uint64("snapshot-index", rd.Snapshot.Metadata.Index))
@@ -277,6 +315,7 @@ func (r *raftNode) start(rh *raftReadyHandler) {
 					// gofail: var raftAfterApplySnap struct{}
 				}
 
+				// 实体累积
 				r.raftStorage.Append(rd.Entries)
 
 				if !islead {
@@ -293,6 +332,7 @@ func (r *raftNode) start(rh *raftReadyHandler) {
 					// on its own single-node cluster, before apply-layer applies the config change.
 					// We simply wait for ALL pending entries to be applied for now.
 					// We might improve this later on if it causes unnecessary long blocking issues.
+					// 配置变更
 					waitApply := false
 					for _, ent := range rd.CommittedEntries {
 						if ent.Type == raftpb.EntryConfChange {
@@ -320,17 +360,20 @@ func (r *raftNode) start(rh *raftReadyHandler) {
 
 				r.Advance()
 			case <-r.stopped:
+			    // 停止
 				return
 			}
 		}
 	}()
 }
 
+// 更新提交索引
 func updateCommittedIndex(ap *apply, rh *raftReadyHandler) {
 	var ci uint64
 	if len(ap.entries) != 0 {
 		ci = ap.entries[len(ap.entries)-1].Index
 	}
+
 	if ap.snapshot.Metadata.Index > ci {
 		ci = ap.snapshot.Metadata.Index
 	}
@@ -388,19 +431,24 @@ func (r *raftNode) processMessages(ms []raftpb.Message) []raftpb.Message {
 	return ms
 }
 
+// 获取一个申请
 func (r *raftNode) apply() chan apply {
 	return r.applyc
 }
 
+// 发送停止信号，等待结束
 func (r *raftNode) stop() {
 	r.stopped <- struct{}{}
 	<-r.done
 }
 
 func (r *raftNode) onStop() {
+    // 停自己、停定时器、停传输层
 	r.Stop()
 	r.ticker.Stop()
 	r.transport.Stop()
+
+    // 关闭存储
 	if err := r.storage.Close(); err != nil {
 		if r.lg != nil {
 			r.lg.Panic("failed to close Raft storage", zap.Error(err))
@@ -408,15 +456,18 @@ func (r *raftNode) onStop() {
 			plog.Panicf("raft close storage error: %v", err)
 		}
 	}
+
+    // 发送结束信号
 	close(r.done)
 }
 
 // for testing
+// 停止传输层
 func (r *raftNode) pauseSending() {
 	p := r.transport.(rafthttp.Pausable)
 	p.Pause()
 }
-
+// 恢复传输层
 func (r *raftNode) resumeSending() {
 	p := r.transport.(rafthttp.Pausable)
 	p.Resume()
@@ -426,6 +477,7 @@ func (r *raftNode) resumeSending() {
 // This can be used for fast-forwarding election
 // ticks in multi data-center deployments, thus
 // speeding up election process.
+// 时间你快点走
 func (r *raftNode) advanceTicks(ticks int) {
 	for i := 0; i < ticks; i++ {
 		r.tick()
@@ -655,27 +707,40 @@ func restartAsStandaloneNode(cfg ServerConfig, snapshot *raftpb.Snapshot) (types
 // ID-related entry:
 // - ConfChangeAddNode, in which case the contained ID will be added into the set.
 // - ConfChangeRemoveNode, in which case the contained ID will be removed from the set.
-func getIDs(lg *zap.Logger, snap *raftpb.Snapshot, ents []raftpb.Entry) []uint64 {
+func getIDs(lg *zap.Logger,
+            snap *raftpb.Snapshot,
+            ents []raftpb.Entry) []uint64 {
 	ids := make(map[uint64]bool)
+
+    // 从快照的元信息里面读取节点列表
 	if snap != nil {
 		for _, id := range snap.Metadata.ConfState.Nodes {
 			ids[id] = true
 		}
 	}
+
 	for _, e := range ents {
 		if e.Type != raftpb.EntryConfChange {
+		    // 仅处理配置变更实体
 			continue
 		}
+
+        // 反序列化
 		var cc raftpb.ConfChange
 		pbutil.MustUnmarshal(&cc, e.Data)
+
 		switch cc.Type {
 		case raftpb.ConfChangeAddNode:
+		    // 增加节点
 			ids[cc.NodeID] = true
 		case raftpb.ConfChangeRemoveNode:
+		    // 删除节点
 			delete(ids, cc.NodeID)
 		case raftpb.ConfChangeUpdateNode:
+		    // 更新节点
 			// do nothing
 		default:
+		    // 异常报错
 			if lg != nil {
 				lg.Panic("unknown ConfChange Type", zap.String("type", cc.Type.String()))
 			} else {
@@ -683,6 +748,8 @@ func getIDs(lg *zap.Logger, snap *raftpb.Snapshot, ents []raftpb.Entry) []uint64
 			}
 		}
 	}
+
+    // 排序后返回
 	sids := make(types.Uint64Slice, 0, len(ids))
 	for id := range ids {
 		sids = append(sids, id)
@@ -696,15 +763,25 @@ func getIDs(lg *zap.Logger, snap *raftpb.Snapshot, ents []raftpb.Entry) []uint64
 // `self` is _not_ removed, even if present in the set.
 // If `self` is not inside the given ids, it creates a Raft entry to add a
 // default member with the given `self`.
-func createConfigChangeEnts(lg *zap.Logger, ids []uint64, self uint64, term, index uint64) []raftpb.Entry {
+func createConfigChangeEnts(lg *zap.Logger,
+                            ids []uint64,
+                            self uint64,
+                            term, index uint64)
+                            []raftpb.Entry {
 	ents := make([]raftpb.Entry, 0)
+
 	next := index + 1
+
+    // 遍历id
 	found := false
 	for _, id := range ids {
 		if id == self {
+		    // 找到自己了
 			found = true
 			continue
 		}
+
+        // 配置变更
 		cc := &raftpb.ConfChange{
 			Type:   raftpb.ConfChangeRemoveNode,
 			NodeID: id,
@@ -718,7 +795,11 @@ func createConfigChangeEnts(lg *zap.Logger, ids []uint64, self uint64, term, ind
 		ents = append(ents, e)
 		next++
 	}
+
 	if !found {
+	    // 如果没有自己
+
+		// 节点属性
 		m := membership.Member{
 			ID:             types.ID(self),
 			RaftAttributes: membership.RaftAttributes{PeerURLs: []string{"http://localhost:2380"}},
@@ -731,6 +812,8 @@ func createConfigChangeEnts(lg *zap.Logger, ids []uint64, self uint64, term, ind
 				plog.Panicf("marshal member should never fail: %v", err)
 			}
 		}
+
+        // 添加节点
 		cc := &raftpb.ConfChange{
 			Type:    raftpb.ConfChangeAddNode,
 			NodeID:  self,
@@ -744,5 +827,6 @@ func createConfigChangeEnts(lg *zap.Logger, ids []uint64, self uint64, term, ind
 		}
 		ents = append(ents, e)
 	}
+
 	return ents
 }

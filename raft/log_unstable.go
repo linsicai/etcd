@@ -22,16 +22,21 @@ import pb "go.etcd.io/etcd/raft/raftpb"
 // might need to truncate the log before persisting unstable.entries.
 type unstable struct {
 	// the incoming unstable snapshot, if any.
+	// 快照
 	snapshot *pb.Snapshot
+
 	// all entries that have not yet been written to storage.
+	// 存储
 	entries []pb.Entry
 	offset  uint64
 
+    // 日志
 	logger Logger
 }
 
 // maybeFirstIndex returns the index of the first possible entry in entries
 // if it has a snapshot.
+// 返回开始序号
 func (u *unstable) maybeFirstIndex() (uint64, bool) {
 	if u.snapshot != nil {
 		return u.snapshot.Metadata.Index + 1, true
@@ -42,13 +47,16 @@ func (u *unstable) maybeFirstIndex() (uint64, bool) {
 
 // maybeLastIndex returns the last index if it has at least one
 // unstable entry or snapshot.
+// 返回结束序号
 func (u *unstable) maybeLastIndex() (uint64, bool) {
 	if l := len(u.entries); l != 0 {
 		return u.offset + uint64(l) - 1, true
 	}
+
 	if u.snapshot != nil {
 		return u.snapshot.Metadata.Index, true
 	}
+
 	return 0, false
 }
 

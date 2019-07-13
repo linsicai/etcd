@@ -21,20 +21,26 @@ import pb "go.etcd.io/etcd/raft/raftpb"
 // this state from ready, it's also caller's duty to differentiate if this
 // state is what it requests through RequestCtx, eg. given a unique id as
 // RequestCtx
+// 读状态
 type ReadState struct {
-	Index      uint64
-	RequestCtx []byte
+	Index      uint64 // 索引
+	RequestCtx []byte // 请求上下文
 }
 
+// 读索引状态
 type readIndexStatus struct {
-	req   pb.Message
-	index uint64
-	acks  map[uint64]struct{}
+	req   pb.Message // 请求
+	index uint64 // 序号
+	acks  map[uint64]struct{} // ack 映射表
 }
 
+// 只读
 type readOnly struct {
+    // 选项
 	option           ReadOnlyOption
+	// 读索引待定
 	pendingReadIndex map[string]*readIndexStatus
+	// 读索引队列
 	readIndexQueue   []string
 }
 
@@ -49,11 +55,15 @@ func newReadOnly(option ReadOnlyOption) *readOnly {
 // `index` is the commit index of the raft state machine when it received
 // the read only request.
 // `m` is the original read only request message from the local or remote node.
+// 添加请求
 func (ro *readOnly) addRequest(index uint64, m pb.Message) {
 	ctx := string(m.Entries[0].Data)
 	if _, ok := ro.pendingReadIndex[ctx]; ok {
+	    // 在处理了
 		return
 	}
+
+    // 加入队列
 	ro.pendingReadIndex[ctx] = &readIndexStatus{index: index, req: m, acks: make(map[uint64]struct{})}
 	ro.readIndexQueue = append(ro.readIndexQueue, ctx)
 }
@@ -61,9 +71,11 @@ func (ro *readOnly) addRequest(index uint64, m pb.Message) {
 // recvAck notifies the readonly struct that the raft state machine received
 // an acknowledgment of the heartbeat that attached with the read only request
 // context.
+// 添加ack
 func (ro *readOnly) recvAck(m pb.Message) int {
 	rs, ok := ro.pendingReadIndex[string(m.Context)]
 	if !ok {
+	    // 不需要处理
 		return 0
 	}
 
@@ -88,16 +100,22 @@ func (ro *readOnly) advance(m pb.Message) []*readIndexStatus {
 		i++
 		rs, ok := ro.pendingReadIndex[okctx]
 		if !ok {
+		    // 系统bug
 			panic("cannot find corresponding read state from pending map")
 		}
+
+        // 入缓存
 		rss = append(rss, rs)
+
 		if okctx == ctx {
+		    // 找到终点了
 			found = true
 			break
 		}
 	}
 
 	if found {
+	    // 删除
 		ro.readIndexQueue = ro.readIndexQueue[i:]
 		for _, rs := range rss {
 			delete(ro.pendingReadIndex, string(rs.req.Entries[0].Data))
@@ -110,9 +128,11 @@ func (ro *readOnly) advance(m pb.Message) []*readIndexStatus {
 
 // lastPendingRequestCtx returns the context of the last pending read only
 // request in readonly struct.
+// 返回最后一次的上下文
 func (ro *readOnly) lastPendingRequestCtx() string {
 	if len(ro.readIndexQueue) == 0 {
 		return ""
 	}
+
 	return ro.readIndexQueue[len(ro.readIndexQueue)-1]
 }

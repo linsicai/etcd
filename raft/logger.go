@@ -21,6 +21,7 @@ import (
 	"os"
 )
 
+// 日志接口
 type Logger interface {
 	Debug(v ...interface{})
 	Debugf(format string, v ...interface{})
@@ -41,21 +42,30 @@ type Logger interface {
 	Panicf(format string, v ...interface{})
 }
 
-func SetLogger(l Logger) { raftLogger = l }
+func SetLogger(l Logger) {
+    raftLogger = l
+}
 
 var (
+    // 默认日志
 	defaultLogger = &DefaultLogger{Logger: log.New(os.Stderr, "raft", log.LstdFlags)}
+
+	// 不打日志
 	discardLogger = &DefaultLogger{Logger: log.New(ioutil.Discard, "", 0)}
+
+	// raft 日志
 	raftLogger    = Logger(defaultLogger)
 )
 
 const (
+    // 调用深度
 	calldepth = 2
 )
 
 // DefaultLogger is a default implementation of the Logger interface.
 type DefaultLogger struct {
 	*log.Logger
+
 	debug bool
 }
 
@@ -98,29 +108,25 @@ func (l *DefaultLogger) Errorf(format string, v ...interface{}) {
 func (l *DefaultLogger) Warning(v ...interface{}) {
 	l.Output(calldepth, header("WARN", fmt.Sprint(v...)))
 }
-
 func (l *DefaultLogger) Warningf(format string, v ...interface{}) {
 	l.Output(calldepth, header("WARN", fmt.Sprintf(format, v...)))
 }
-
 func (l *DefaultLogger) Fatal(v ...interface{}) {
 	l.Output(calldepth, header("FATAL", fmt.Sprint(v...)))
 	os.Exit(1)
 }
-
 func (l *DefaultLogger) Fatalf(format string, v ...interface{}) {
 	l.Output(calldepth, header("FATAL", fmt.Sprintf(format, v...)))
 	os.Exit(1)
 }
-
 func (l *DefaultLogger) Panic(v ...interface{}) {
 	l.Logger.Panic(v...)
 }
-
 func (l *DefaultLogger) Panicf(format string, v ...interface{}) {
 	l.Logger.Panicf(format, v...)
 }
 
+// 日志头
 func header(lvl, msg string) string {
 	return fmt.Sprintf("%s: %s", lvl, msg)
 }

@@ -21,6 +21,7 @@ import (
 	pb "go.etcd.io/etcd/raft/raftpb"
 )
 
+// 序列化状态
 func (st StateType) MarshalJSON() ([]byte, error) {
 	return []byte(fmt.Sprintf("%q", st.String())), nil
 }
@@ -46,16 +47,28 @@ func max(a, b uint64) uint64 {
 	return b
 }
 
+// 是否本地消息
 func IsLocalMsg(msgt pb.MessageType) bool {
-	return msgt == pb.MsgHup || msgt == pb.MsgBeat || msgt == pb.MsgUnreachable ||
-		msgt == pb.MsgSnapStatus || msgt == pb.MsgCheckQuorum
+	return \
+	msgt == pb.MsgHup
+	|| msgt == pb.MsgBeat
+	|| msgt == pb.MsgUnreachable
+	|| msgt == pb.MsgSnapStatus
+	|| msgt == pb.MsgCheckQuorum
 }
 
+// 是否响应消息
 func IsResponseMsg(msgt pb.MessageType) bool {
-	return msgt == pb.MsgAppResp || msgt == pb.MsgVoteResp || msgt == pb.MsgHeartbeatResp || msgt == pb.MsgUnreachable || msgt == pb.MsgPreVoteResp
+	return \
+	msgt == pb.MsgAppResp
+	|| msgt == pb.MsgVoteResp
+	|| msgt == pb.MsgHeartbeatResp
+	|| msgt == pb.MsgUnreachable
+	|| msgt == pb.MsgPreVoteResp
 }
 
 // voteResponseType maps vote and prevote message types to their corresponding responses.
+// 投票回包类型
 func voteRespMsgType(msgt pb.MessageType) pb.MessageType {
 	switch msgt {
 	case pb.MsgVote:
@@ -69,6 +82,7 @@ func voteRespMsgType(msgt pb.MessageType) pb.MessageType {
 
 // EntryFormatter can be implemented by the application to provide human-readable formatting
 // of entry data. Nil is a valid EntryFormatter and will use a default format.
+// 实体格式化器
 type EntryFormatter func([]byte) string
 
 // DescribeMessage returns a concise human-readable description of a

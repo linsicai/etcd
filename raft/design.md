@@ -1,10 +1,16 @@
 ## Progress
 
-Progress represents a follower’s progress in the view of the leader. Leader maintains progresses of all followers, and sends `replication message` to the follower based on its progress. 
+Progress represents a follower’s progress in the view of the leader.
+
+Leader maintains progresses of all followers, and sends `replication message` to the follower based on its progress. 
 
 `replication message` is a `msgApp` with log entries.
 
-A progress has two attribute: `match` and `next`. `match` is the index of the highest known matched entry. If leader knows nothing about follower’s replication status, `match` is set to zero. `next` is the index of the first entry that will be replicated to the follower. Leader puts entries from `next` to its latest one in next `replication message`.
+A progress has two attribute: `match` and `next`.
+
+`match` is the index of the highest known matched entry. If leader knows nothing about follower’s replication status, `match` is set to zero.
+
+`next` is the index of the first entry that will be replicated to the follower. Leader puts entries from `next` to its latest one in next `replication message`.
 
 A progress is in one of the three state: `probe`, `replicate`, `snapshot`. 
 

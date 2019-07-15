@@ -87,15 +87,24 @@ type EntryFormatter func([]byte) string
 
 // DescribeMessage returns a concise human-readable description of a
 // Message for debugging.
+// 消息格式化
 func DescribeMessage(m pb.Message, f EntryFormatter) string {
 	var buf bytes.Buffer
+
+    基本信息
 	fmt.Fprintf(&buf, "%x->%x %v Term:%d Log:%d/%d", m.From, m.To, m.Type, m.Term, m.LogTerm, m.Index)
+
+	// 拒绝信息
 	if m.Reject {
 		fmt.Fprintf(&buf, " Rejected (Hint: %d)", m.RejectHint)
 	}
+
+    // 提交信息
 	if m.Commit != 0 {
 		fmt.Fprintf(&buf, " Commit:%d", m.Commit)
 	}
+
+    // 实体信息
 	if len(m.Entries) > 0 {
 		fmt.Fprintf(&buf, " Entries:[")
 		for i, e := range m.Entries {
@@ -106,32 +115,40 @@ func DescribeMessage(m pb.Message, f EntryFormatter) string {
 		}
 		fmt.Fprintf(&buf, "]")
 	}
+
+    // 快照信息
 	if !IsEmptySnap(m.Snapshot) {
 		fmt.Fprintf(&buf, " Snapshot:%v", m.Snapshot)
 	}
+
 	return buf.String()
 }
 
 // PayloadSize is the size of the payload of this Entry. Notably, it does not
 // depend on its Index or Term.
+// 负载大小
 func PayloadSize(e pb.Entry) int {
 	return len(e.Data)
 }
 
 // DescribeEntry returns a concise human-readable description of an
 // Entry for debugging.
+// 实体格式化
 func DescribeEntry(e pb.Entry, f EntryFormatter) string {
 	var formatted string
+
 	if e.Type == pb.EntryNormal && f != nil {
 		formatted = f(e.Data)
 	} else {
 		formatted = fmt.Sprintf("%q", e.Data)
 	}
+
 	return fmt.Sprintf("%d/%d %s %s", e.Term, e.Index, e.Type, formatted)
 }
 
 // DescribeEntries calls DescribeEntry for each Entry, adding a newline to
 // each.
+// 格式化实体列表
 func DescribeEntries(ents []pb.Entry, f EntryFormatter) string {
 	var buf bytes.Buffer
 	for _, e := range ents {
@@ -140,10 +157,12 @@ func DescribeEntries(ents []pb.Entry, f EntryFormatter) string {
 	return buf.String()
 }
 
+// 分包
 func limitSize(ents []pb.Entry, maxSize uint64) []pb.Entry {
 	if len(ents) == 0 {
 		return ents
 	}
+
 	size := ents[0].Size()
 	var limit int
 	for limit = 1; limit < len(ents); limit++ {
@@ -152,5 +171,6 @@ func limitSize(ents []pb.Entry, maxSize uint64) []pb.Entry {
 			break
 		}
 	}
+
 	return ents[:limit]
 }

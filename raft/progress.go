@@ -30,7 +30,9 @@ var prstmap = [...]string{
 	"ProgressStateSnapshot",
 }
 
-func (st ProgressStateType) String() string { return prstmap[uint64(st)] }
+func (st ProgressStateType) String() string {
+    return prstmap[uint64(st)]
+}
 
 // Progress represents a follower’s progress in the view of the leader. Leader maintains
 // progresses of all followers, and sends entries to the follower based on its progress.
@@ -47,6 +49,7 @@ type Progress struct {
 	//
 	// When in ProgressStateSnapshot, leader should have sent out snapshot
 	// before and stops sending any replication message.
+	// 状态
 	State ProgressStateType
 
 	// Paused is used in ProgressStateProbe.
@@ -82,6 +85,7 @@ type Progress struct {
 	IsLearner bool
 }
 
+// 重置状态
 func (pr *Progress) resetState(state ProgressStateType) {
 	pr.Paused = false
 	pr.PendingSnapshot = 0
@@ -95,6 +99,8 @@ func (pr *Progress) becomeProbe() {
 	// probes from pendingSnapshot + 1.
 	if pr.State == ProgressStateSnapshot {
 		pendingSnapshot := pr.PendingSnapshot
+
+        // 重置状态 与 next
 		pr.resetState(ProgressStateProbe)
 		pr.Next = max(pr.Match+1, pendingSnapshot+1)
 	} else {
@@ -103,11 +109,13 @@ func (pr *Progress) becomeProbe() {
 	}
 }
 
+// 成为复制者
 func (pr *Progress) becomeReplicate() {
 	pr.resetState(ProgressStateReplicate)
 	pr.Next = pr.Match + 1
 }
 
+// 成为快照
 func (pr *Progress) becomeSnapshot(snapshoti uint64) {
 	pr.resetState(ProgressStateSnapshot)
 	pr.PendingSnapshot = snapshoti
@@ -117,45 +125,61 @@ func (pr *Progress) becomeSnapshot(snapshoti uint64) {
 // Otherwise it updates the progress and returns true.
 func (pr *Progress) maybeUpdate(n uint64) bool {
 	var updated bool
+
+    // 判定是否更新
 	if pr.Match < n {
 		pr.Match = n
 		updated = true
 		pr.resume()
 	}
+
+    // 更新next
 	if pr.Next < n+1 {
 		pr.Next = n + 1
 	}
+
 	return updated
 }
 
-func (pr *Progress) optimisticUpdate(n uint64) { pr.Next = n + 1 }
+// 乐观的更新
+func (pr *Progress) optimisticUpdate(n uint64) {
+    pr.Next = n + 1
+}
 
 // maybeDecrTo returns false if the given to index comes from an out of order message.
 // Otherwise it decreases the progress next index to min(rejected, last) and returns true.
 func (pr *Progress) maybeDecrTo(rejected, last uint64) bool {
 	if pr.State == ProgressStateReplicate {
+	    // 复制状态
 		// the rejection must be stale if the progress has matched and "rejected"
 		// is smaller than "match".
 		if rejected <= pr.Match {
+		    // 老的拒绝
 			return false
 		}
 		// directly decrease next to match + 1
+		// 重置next
 		pr.Next = pr.Match + 1
 		return true
 	}
 
 	// the rejection must be stale if "rejected" does not match next - 1
 	if pr.Next-1 != rejected {
+	    // 老的拒绝
 		return false
 	}
 
+    // 重置next
 	if pr.Next = min(rejected, last+1); pr.Next < 1 {
 		pr.Next = 1
 	}
+
+    // 继续
 	pr.resume()
 	return true
 }
 
+// 暂停与继续
 func (pr *Progress) pause()  { pr.Paused = true }
 func (pr *Progress) resume() { pr.Paused = false }
 
@@ -163,25 +187,35 @@ func (pr *Progress) resume() { pr.Paused = false }
 // paused. A node may be paused because it has rejected recent
 // MsgApps, is currently waiting for a snapshot, or has reached the
 // MaxInflightMsgs limit.
+// 是否停止
 func (pr *Progress) IsPaused() bool {
 	switch pr.State {
 	case ProgressStateProbe:
+	    // 默认状态，看是否停止
 		return pr.Paused
 	case ProgressStateReplicate:
+	    // 复制状态，看队列是否满了
 		return pr.ins.full()
 	case ProgressStateSnapshot:
+	    // 快照默认停止
 		return true
 	default:
 		panic("unexpected state")
 	}
 }
 
-func (pr *Progress) snapshotFailure() { pr.PendingSnapshot = 0 }
+// 快照错误
+func (pr *Progress) snapshotFailure() {
+    pr.PendingSnapshot = 0
+}
 
 // needSnapshotAbort returns true if snapshot progress's Match
 // is equal or higher than the pendingSnapshot.
+// 是否需要放弃快照？
 func (pr *Progress) needSnapshotAbort() bool {
-	return pr.State == ProgressStateSnapshot && pr.Match >= pr.PendingSnapshot
+	return
+	pr.State == ProgressStateSnapshot &&
+	pr.Match >= pr.PendingSnapshot
 }
 
 func (pr *Progress) String() string {
@@ -190,15 +224,20 @@ func (pr *Progress) String() string {
 
 type inflights struct {
 	// the starting index in the buffer
+	// 开始索引
 	start int
+
 	// number of inflights in the buffer
+	// 数目
 	count int
 
 	// the size of the buffer
+	// 容量
 	size int
 
 	// buffer contains the index of the last entry
 	// inside one message.
+	// buffer 列表
 	buffer []uint64
 }
 
@@ -213,14 +252,20 @@ func (in *inflights) add(inflight uint64) {
 	if in.full() {
 		panic("cannot add into a full inflights")
 	}
+
+    // 循环队列
 	next := in.start + in.count
 	size := in.size
 	if next >= size {
 		next -= size
 	}
+
+    // 扩大buffer
 	if next >= len(in.buffer) {
 		in.growBuf()
 	}
+
+    // 如buffer
 	in.buffer[next] = inflight
 	in.count++
 }
@@ -228,13 +273,18 @@ func (in *inflights) add(inflight uint64) {
 // grow the inflight buffer by doubling up to inflights.size. We grow on demand
 // instead of preallocating to inflights.size to handle systems which have
 // thousands of Raft groups per process.
+// buffer 增长
 func (in *inflights) growBuf() {
 	newSize := len(in.buffer) * 2
 	if newSize == 0 {
+	    // 默认一个
 		newSize = 1
 	} else if newSize > in.size {
+	    // 有上限
 		newSize = in.size
 	}
+
+    // buffer 扩大
 	newBuffer := make([]uint64, newSize)
 	copy(newBuffer, in.buffer)
 	in.buffer = newBuffer
@@ -244,6 +294,7 @@ func (in *inflights) growBuf() {
 func (in *inflights) freeTo(to uint64) {
 	if in.count == 0 || to < in.buffer[in.start] {
 		// out of the left side of the window
+		// to 太小
 		return
 	}
 
@@ -251,16 +302,20 @@ func (in *inflights) freeTo(to uint64) {
 	var i int
 	for i = 0; i < in.count; i++ {
 		if to < in.buffer[idx] { // found the first large inflight
+		    // 找到第一个比to 大的
 			break
 		}
 
 		// increase index and maybe rotate
+		// 索引向右走
 		size := in.size
 		if idx++; idx >= size {
 			idx -= size
 		}
 	}
+
 	// free i inflights and set new start index
+	// 清空索引
 	in.count -= i
 	in.start = idx
 	if in.count == 0 {
@@ -270,14 +325,18 @@ func (in *inflights) freeTo(to uint64) {
 	}
 }
 
-func (in *inflights) freeFirstOne() { in.freeTo(in.buffer[in.start]) }
+func (in *inflights) freeFirstOne() {
+    in.freeTo(in.buffer[in.start])
+}
 
 // full returns true if the inflights is full.
+// 满了？
 func (in *inflights) full() bool {
 	return in.count == in.size
 }
 
 // resets frees all inflights.
+// 重置索引
 func (in *inflights) reset() {
 	in.count = 0
 	in.start = 0

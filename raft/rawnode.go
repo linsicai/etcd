@@ -32,6 +32,7 @@ var ErrStepPeerNotFound = errors.New("raft: cannot step as peer not found")
 // more fully there.
 type RawNode struct {
 	raft       *raft
+
 	prevSoftSt *SoftState
 	prevHardSt pb.HardState
 }

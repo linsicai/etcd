@@ -31,8 +31,10 @@ var ErrStepPeerNotFound = errors.New("raft: cannot step as peer not found")
 // The methods of this struct correspond to the methods of Node and are described
 // more fully there.
 type RawNode struct {
+    // 
 	raft       *raft
 
+    // 前一软硬状态
 	prevSoftSt *SoftState
 	prevHardSt pb.HardState
 }
@@ -41,7 +43,9 @@ func (rn *RawNode) newReady() Ready {
 	return newReady(rn.raft, rn.prevSoftSt, rn.prevHardSt)
 }
 
+// 提交ready
 func (rn *RawNode) commitReady(rd Ready) {
+    // 更新prev
 	if rd.SoftState != nil {
 		rn.prevSoftSt = rd.SoftState
 	}
@@ -53,17 +57,23 @@ func (rn *RawNode) commitReady(rd Ready) {
 	// the next Ready. Note that if the current HardState contains a
 	// new Commit index, this does not mean that we're also applying
 	// all of the new entries due to commit pagination by size.
+	// 做apply
 	if index := rd.appliedCursor(); index > 0 {
 		rn.raft.raftLog.appliedTo(index)
 	}
 
+    // 提交实体
 	if len(rd.Entries) > 0 {
 		e := rd.Entries[len(rd.Entries)-1]
 		rn.raft.raftLog.stableTo(e.Index, e.Term)
 	}
+
+    // 处理快照
 	if !IsEmptySnap(rd.Snapshot) {
 		rn.raft.raftLog.stableSnapTo(rd.Snapshot.Metadata.Index)
 	}
+
+    // ？？？
 	if len(rd.ReadStates) != 0 {
 		rn.raft.readStates = nil
 	}
@@ -71,6 +81,7 @@ func (rn *RawNode) commitReady(rd Ready) {
 
 // NewRawNode returns a new RawNode given configuration and a list of raft peers.
 func NewRawNode(config *Config, peers []Peer) (*RawNode, error) {
+    // 参数校验
 	if config.ID == 0 {
 		panic("config.ID must not be zero")
 	}
@@ -82,11 +93,13 @@ func NewRawNode(config *Config, peers []Peer) (*RawNode, error) {
 	if err != nil {
 		panic(err) // TODO(bdarnell)
 	}
+
 	// If the log is empty, this is a new RawNode (like StartNode); otherwise it's
 	// restoring an existing RawNode (like RestartNode).
 	// TODO(bdarnell): rethink RawNode initialization and whether the application needs
 	// to be able to tell us when it expects the RawNode to exist.
 	if lastIndex == 0 {
+	    // 提交配置变更
 		r.becomeFollower(1, None)
 		ents := make([]pb.Entry, len(peers))
 		for i, peer := range peers {
@@ -106,6 +119,7 @@ func NewRawNode(config *Config, peers []Peer) (*RawNode, error) {
 	}
 
 	// Set the initial hard and soft states after performing all initialization.
+	// 更新软硬状态
 	rn.prevSoftSt = r.softState()
 	if lastIndex == 0 {
 		rn.prevHardSt = emptyState
@@ -205,6 +219,7 @@ func (rn *RawNode) Ready() Ready {
 
 // HasReady called when RawNode user need to check if any Ready pending.
 // Checking logic in this method should be consistent with Ready.containsUpdates().
+// 是否有ready
 func (rn *RawNode) HasReady() bool {
 	r := rn.raft
 	if !r.softState().equal(rn.prevSoftSt) {

@@ -24,6 +24,7 @@ import (
 )
 
 // URL 列表
+// [scheme:][//[userinfo@]host][/]path[?query][#fragment]
 type URLs []url.URL
 
 // 新建URL 列表
@@ -31,7 +32,7 @@ func NewURLs(strs []string) (URLs, error) {
 	// 创建切片
 	all := make([]url.URL, len(strs))
 
-	// 判断长度
+	// 判空
 	if len(all) == 0 {
 		return nil, errors.New("no valid URLs given")
 	}
@@ -51,12 +52,12 @@ func NewURLs(strs []string) (URLs, error) {
 			return nil, fmt.Errorf("URL scheme must be http, https, unix, or unixs: %s", in)
 		}
 
-		// 解析Host和端口
+		// 解析Host和端口，需要有ip、port
 		if _, _, err := net.SplitHostPort(u.Host); err != nil {
 			return nil, fmt.Errorf(`URL address does not have the form "host:port": %s`, in)
 		}
 
-		// 路径校验
+		// 必须没有路径
 		if u.Path != "" {
 			return nil, fmt.Errorf("URL must not contain a path: %s", in)
 		}

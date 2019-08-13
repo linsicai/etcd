@@ -9,6 +9,13 @@ option (gogoproto.unmarshaler_all) = true;
 option (gogoproto.goproto_getters_all) = false;
 option (gogoproto.goproto_enum_prefix_all) = false;
 
+// 硬件状态：任期、投票、提交
+message HardState {
+	optional uint64 term   = 1 [(gogoproto.nullable) = false];
+	optional uint64 vote   = 2 [(gogoproto.nullable) = false];
+	optional uint64 commit = 3 [(gogoproto.nullable) = false];
+}
+
 // 实体类型
 enum EntryType {
 	EntryNormal     = 0;
@@ -22,6 +29,12 @@ message Entry {
 	optional uint64     Index = 3 [(gogoproto.nullable) = false]; // must be 64-bit aligned for atomic operations
 	optional EntryType  Type  = 1 [(gogoproto.nullable) = false];
 	optional bytes      Data  = 4;
+}
+
+// 配置状态
+message ConfState {
+	repeated uint64 nodes    = 1; // 节点列表
+	repeated uint64 learners = 2; // 学习者列表
 }
 
 // 元信息：节点信息、任期、序号
@@ -74,19 +87,6 @@ message Message {
 	optional bool        reject      = 10 [(gogoproto.nullable) = false];
 	optional uint64      rejectHint  = 11 [(gogoproto.nullable) = false];
 	optional bytes       context     = 12;
-}
-
-// 硬件状态：任期、投票、提交
-message HardState {
-	optional uint64 term   = 1 [(gogoproto.nullable) = false];
-	optional uint64 vote   = 2 [(gogoproto.nullable) = false];
-	optional uint64 commit = 3 [(gogoproto.nullable) = false];
-}
-
-// 配置状态
-message ConfState {
-	repeated uint64 nodes    = 1; // 节点列表
-	repeated uint64 learners = 2; // 学习者列表
 }
 
 // 配置变更类型

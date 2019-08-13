@@ -29,7 +29,7 @@ type raftLog struct {
 
 	// unstable contains all unstable entries and snapshot.
 	// they will be saved into storage.
-	// 未稳定
+	// 未稳定的数据，如实体快照等
 	unstable unstable
 
 	// committed is the highest log position that is known to be in

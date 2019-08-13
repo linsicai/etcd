@@ -33,20 +33,23 @@ const None uint64 = 0
 const noLimit = math.MaxUint64
 
 // Possible values for StateType.
+// 状态
 const (
-	StateFollower StateType = iota
-	StateCandidate
-	StateLeader
-	StatePreCandidate
+	StateFollower StateType = iota // 跟随者
+	StateCandidate // 候选人
+	StateLeader // 领导者
+	StatePreCandidate // 预候选人
 	numStates
 )
 
+// 只读选项
 type ReadOnlyOption int
 
 const (
 	// ReadOnlySafe guarantees the linearizability of the read only request by
 	// communicating with the quorum. It is the default and suggested option.
 	ReadOnlySafe ReadOnlyOption = iota
+
 	// ReadOnlyLeaseBased ensures linearizability of the read only request by
 	// relying on the leader lease. It can be affected by clock drift.
 	// If the clock drift is unbounded, leader might keep the lease longer than it
@@ -60,9 +63,11 @@ const (
 	// campaignPreElection represents the first phase of a normal election when
 	// Config.PreVote is true.
 	campaignPreElection CampaignType = "CampaignPreElection"
+
 	// campaignElection represents a normal (time-based) election (the second phase
 	// of the election when Config.PreVote is true).
 	campaignElection CampaignType = "CampaignElection"
+
 	// campaignTransfer represents the type of leader transfer
 	campaignTransfer CampaignType = "CampaignTransfer"
 )
@@ -78,7 +83,6 @@ type lockedRand struct {
 	mu   sync.Mutex
 	rand *rand.Rand
 }
-
 func (r *lockedRand) Intn(n int) int {
 	r.mu.Lock()
 	v := r.rand.Intn(n)
@@ -104,7 +108,6 @@ var stmap = [...]string{
 	"StateLeader",
 	"StatePreCandidate",
 }
-
 func (st StateType) String() string {
 	return stmap[uint64(st)]
 }
@@ -132,6 +135,7 @@ type Config struct {
 	// HeartbeatTick. We suggest ElectionTick = 10 * HeartbeatTick to avoid
 	// unnecessary leader switching.
 	ElectionTick int
+
 	// HeartbeatTick is the number of Node.Tick invocations that must pass between
 	// heartbeats. That is, a leader sends heartbeat messages to maintain its
 	// leadership every HeartbeatTick ticks.
@@ -142,6 +146,7 @@ type Config struct {
 	// Storage when it needs. raft reads out the previous state and configuration
 	// out of storage when restarting.
 	Storage Storage
+
 	// Applied is the last applied index. It should only be set when restarting
 	// raft. raft will not return entries to the application smaller or equal to
 	// Applied. If Applied is unset when restarting, raft might return previous

@@ -27,8 +27,8 @@ type unstable struct {
 
 	// all entries that have not yet been written to storage.
 	// 存储
-	entries []pb.Entry
-	offset  uint64
+	entries []pb.Entry // 实体列表
+	offset  uint64     // 偏移量
 
     // 日志
 	logger Logger
@@ -64,8 +64,9 @@ func (u *unstable) maybeLastIndex() (uint64, bool) {
 // is any.
 // 根据索引找term
 func (u *unstable) maybeTerm(i uint64) (uint64, bool) {
+    // 校验下界
 	if i < u.offset {
-	    // 比较小的索引从快照里面找
+	    // 不在实体里面，从快照里面找
 		if u.snapshot == nil {
 			return 0, false
 		}
@@ -87,6 +88,7 @@ func (u *unstable) maybeTerm(i uint64) (uint64, bool) {
 	return u.entries[i-u.offset].Term, true
 }
 
+// 稳定操作，抛弃一些实体
 func (u *unstable) stableTo(i, t uint64) {
     // 根据索引找任期
 	gt, ok := u.maybeTerm(i)
@@ -132,13 +134,14 @@ func (u *unstable) stableSnapTo(i uint64) {
 	}
 }
 
-// 恢复快照
+// 恢复快照，会删除实体
 func (u *unstable) restore(s pb.Snapshot) {
 	u.offset = s.Metadata.Index + 1
 	u.entries = nil
 	u.snapshot = &s
 }
 
+// append 实体
 func (u *unstable) truncateAndAppend(ents []pb.Entry) {
 	after := ents[0].Index
 
@@ -149,7 +152,7 @@ func (u *unstable) truncateAndAppend(ents []pb.Entry) {
 		// directly append
 		u.entries = append(u.entries, ents...)
 	case after <= u.offset:
-	    // append 小的
+	    // 小的实体，直接覆盖写
 		u.logger.Infof("replace the unstable entries from index %d", after)
 		// The log is being truncated to before our current offset
 		// portion, so set the offset and replace the entries

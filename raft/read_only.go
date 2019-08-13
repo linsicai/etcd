@@ -17,6 +17,7 @@ package raft
 import pb "go.etcd.io/etcd/raft/raftpb"
 
 // ReadState provides state for read only query.
+// 表示只读查询
 // It's caller's responsibility to call ReadIndex first before getting
 // this state from ready, it's also caller's duty to differentiate if this
 // state is what it requests through RequestCtx, eg. given a unique id as
@@ -24,13 +25,15 @@ import pb "go.etcd.io/etcd/raft/raftpb"
 // 读状态
 type ReadState struct {
 	Index      uint64 // 索引
+
 	RequestCtx []byte // 请求上下文
 }
 
 // 读索引状态
 type readIndexStatus struct {
 	req   pb.Message // 请求
-	index uint64 // 序号
+
+	index uint64     // 序号
 	acks  map[uint64]struct{} // ack 映射表
 }
 
@@ -38,8 +41,10 @@ type readIndexStatus struct {
 type readOnly struct {
     // 选项
 	option           ReadOnlyOption
-	// 读索引待定
+
+	// 待处理读索引
 	pendingReadIndex map[string]*readIndexStatus
+
 	// 读索引队列
 	readIndexQueue   []string
 }
@@ -59,12 +64,16 @@ func newReadOnly(option ReadOnlyOption) *readOnly {
 func (ro *readOnly) addRequest(index uint64, m pb.Message) {
 	ctx := string(m.Entries[0].Data)
 	if _, ok := ro.pendingReadIndex[ctx]; ok {
-	    // 在处理了
+	    // 在处理了，直接返回
 		return
 	}
 
-    // 加入队列
-	ro.pendingReadIndex[ctx] = &readIndexStatus{index: index, req: m, acks: make(map[uint64]struct{})}
+    // 加入读索引队列
+	ro.pendingReadIndex[ctx] = &readIndexStatus{
+	    index: index,
+	    req: m,
+	    acks: make(map[uint64]struct{})
+	}
 	ro.readIndexQueue = append(ro.readIndexQueue, ctx)
 }
 
@@ -75,7 +84,7 @@ func (ro *readOnly) addRequest(index uint64, m pb.Message) {
 func (ro *readOnly) recvAck(m pb.Message) int {
 	rs, ok := ro.pendingReadIndex[string(m.Context)]
 	if !ok {
-	    // 不需要处理
+	    // 不在待处理队列中，抛弃
 		return 0
 	}
 
@@ -96,6 +105,7 @@ func (ro *readOnly) advance(m pb.Message) []*readIndexStatus {
 	ctx := string(m.Context)
 	rss := []*readIndexStatus{}
 
+    // 前进到终点
 	for _, okctx := range ro.readIndexQueue {
 		i++
 		rs, ok := ro.pendingReadIndex[okctx]

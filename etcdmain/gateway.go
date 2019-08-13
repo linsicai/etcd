@@ -28,17 +28,23 @@ import (
 )
 
 var (
+    // 监听地址
     gatewayListenAddr            string
 
+    // 网关地址
     gatewayEndpoints             []string
 
+    // 网关dns 集群
     gatewayDNSCluster            string
     gatewayDNSClusterServiceName string
 
+    // 网关安全发现
     gatewayInsecureDiscovery     bool
 
+    // 网关重试延时
     getewayRetryDelay            time.Duration
 
+    // 网关ca
     gatewayCA                    string
 )
 
@@ -150,6 +156,7 @@ func startGateway(cmd *cobra.Command, args []string) {
     }
 
     // At this point, etcd gateway listener is initialized
+    // 同志systemd
     notifySystemd(lg)
 
     tp.Run()

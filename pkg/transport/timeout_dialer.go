@@ -19,12 +19,15 @@ import (
 	"time"
 )
 
+// 读写超时拨号器
 type rwTimeoutDialer struct {
 	wtimeoutd  time.Duration
 	rdtimeoutd time.Duration
+
 	net.Dialer
 }
 
+// 初始化
 func (d *rwTimeoutDialer) Dial(network, address string) (net.Conn, error) {
 	conn, err := d.Dialer.Dial(network, address)
 	tconn := &timeoutConn{

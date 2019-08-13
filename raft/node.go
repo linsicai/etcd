@@ -107,7 +107,7 @@ func IsEmptySnap(sp pb.Snapshot) bool {
 
 func (rd Ready) containsUpdates() bool {
 	return \
-	rd.SoftState != nil ||p
+	rd.SoftState != nil ||
 	!IsEmptyHardState(rd.HardState) ||
 	!IsEmptySnap(rd.Snapshot) ||
 	len(rd.Entries) > 0 ||
@@ -119,6 +119,7 @@ func (rd Ready) containsUpdates() bool {
 // appliedCursor extracts from the Ready the highest index the client has
 // applied (once the Ready is confirmed via Advance). If no information is
 // contained in the Ready, returns zero.
+// 获取已提交索引
 func (rd Ready) appliedCursor() uint64 {
 	if n := len(rd.CommittedEntries); n > 0 {
 		return rd.CommittedEntries[n-1].Index
@@ -135,14 +136,16 @@ func (rd Ready) appliedCursor() uint64 {
 type Node interface {
 	// Tick increments the internal logical clock for the Node by a single tick. Election
 	// timeouts and heartbeat timeouts are in units of ticks.
+	// 时钟函数
 	Tick()
 
-	// Campaign causes the Node to transition to candidate state and start campaigning to become leader.
+	// Campaign causes the Node to transition to candidate state and start campaigning to become leader
 	Campaign(ctx context.Context) error
 
 	// Propose proposes that data be appended to the log. Note that proposals can be lost without
 	// notice, therefore it is user's job to ensure proposal retries.
 	Propose(ctx context.Context, data []byte) error
+
 	// ProposeConfChange proposes config change.
 	// At most one ConfChange can be in the process of going through consensus.
 	// Application needs to call ApplyConfChange when applying EntryConfChange type entry.
@@ -215,14 +218,15 @@ type Peer struct {
 // StartNode returns a new Node given configuration and a list of raft peers.
 // It appends a ConfChangeAddNode entry for each given peer to the initial log.
 func StartNode(c *Config, peers []Peer) Node {
+    // 创建raft
 	r := newRaft(c)
 
 	// become the follower at term 1 and apply initial configuration
 	// entries of term 1
-	// 变成跟随者
+	// 默认是追随者
 	r.becomeFollower(1, None)
 
-    // 拼变更日志
+    // 写raft日志，内容为增加对侧节点
 	for _, peer := range peers {
 		cc := pb.ConfChange{Type: pb.ConfChangeAddNode, NodeID: peer.ID, Context: peer.Context}
 		d, err := cc.Marshal()
@@ -252,7 +256,7 @@ func StartNode(c *Config, peers []Peer) Node {
 		r.addNode(peer.ID)
 	}
 
-    // 协程run
+    // 新建节点，并运行
 	n := newNode()
 	n.logger = c.Logger
 	go n.run(r)
@@ -264,8 +268,10 @@ func StartNode(c *Config, peers []Peer) Node {
 // If the caller has an existing state machine, pass in the last log index that
 // has been applied to it; otherwise use zero.
 func RestartNode(c *Config) Node {
+    // 新建raft
 	r := newRaft(c)
 
+    // 新建节点并运行
 	n := newNode()
 	n.logger = c.Logger
 	go n.run(r)
@@ -282,10 +288,12 @@ type msgWithResult struct {
 // 节点
 type node struct {
 	propc      chan msgWithResult // 提议通道
+
 	recvc      chan pb.Message // 消息通道
 	confc      chan pb.ConfChange // 配置变更通道
 	confstatec chan pb.ConfState // 状态通道
 	readyc     chan Ready // 准备通道
+
 	advancec   chan struct{} // 快进信号
 	tickc      chan struct{} // tick 信号
 
@@ -307,6 +315,7 @@ func newNode() node {
 		// make tickc a buffered chan, so raft node can buffer some ticks when the node
 		// is busy processing raft messages. Raft node will resume process buffered
 		// ticks when it becomes idle.
+		// 节点忙时候，可以buffer 住一些时钟
 		tickc:  make(chan struct{}, 128),
 		done:   make(chan struct{}),
 		stop:   make(chan struct{}),
@@ -401,7 +410,7 @@ func (n *node) run(r *raft) {
 			    // 发送自己的状态
 				select {
 				case n.confstatec <- pb.ConfState{
-					Nodes:    r.nodes(),
+				Nodes:    r.nodes(),
 					Learners: r.learnerNodes()}:
 				case <-n.done:
 				}
@@ -493,16 +502,19 @@ func (n *node) run(r *raft) {
 // Tick increments the internal logical clock for this Node. Election timeouts
 // and heartbeat timeouts are in units of ticks.
 func (n *node) Tick() {
-    // 等待tick
+    // 触发时钟
 	select {
 	case n.tickc <- struct{}{}:
+	    // 写tick
 	case <-n.done:
+	    // 系统结束
 	default:
+	    // 写不进去
 		n.logger.Warningf("A tick missed to fire. Node blocks too long!")
 	}
 }
 
-// 战斗？
+// 触发选主
 func (n *node) Campaign(ctx context.Context) error {
     return n.step(ctx, pb.Message{Type: pb.MsgHup})
 }
@@ -698,7 +710,7 @@ func newReady(r *raft, prevSoftSt *SoftState, prevHardSt pb.HardState) Ready {
 
 // MustSync returns true if the hard state and count of Raft entries indicate
 // that a synchronous write to persistent storage is required.
-// 硬状态有变更且有实体
+// 硬状态有变更或者有实体
 func MustSync(st, prevst pb.HardState, entsnum int) bool {
 	// Persistent state on all servers:
 	// (Updated on stable storage before responding to RPCs)

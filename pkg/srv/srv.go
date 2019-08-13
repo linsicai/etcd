@@ -27,18 +27,23 @@ import (
 var (
 	// indirection for testing
 	lookupSRV      = net.LookupSRV // net.DefaultResolver.LookupSRV when ctxs don't conflict
+	// LookupSRV
+	// 根据service.proto.name 去找dns 找地址
+	// 非标准模式，设置service、proto 为空，直接根据名字找地址
 
 	resolveTCPAddr = net.ResolveTCPAddr
+	// 根据地址找ip port
 )
 
 // GetCluster gets the cluster information via DNS discovery.
 // Also sees each entry as a separate instance.
-// 通过dns 或者 接入点获取地址
+// 已知接入url
+// 去dns 根据scheme、service、name 找地址，然后去接入url 关联上名称
 func GetCluster(serviceScheme, service, name, dns string, apurls types.URLs) ([]string, error) {
 	tempName := int(0)
 	tcp2ap := make(map[string]url.URL)
 
-    // 解析接入点url
+    // 从接入url，解析出ip port
 	// First, resolve the apurls
 	for _, url := range apurls {
 		tcpAddr, err := resolveTCPAddr("tcp", url.Host)
@@ -51,7 +56,7 @@ func GetCluster(serviceScheme, service, name, dns string, apurls types.URLs) ([]
 
 	stringParts := []string{}
 	updateNodeMap := func(service, scheme string) error {
-	    // dns 查找服务，返回cname、地址、错误
+	    // 去dns 查找服务，返回cname、地址、错误
 		_, addrs, err := lookupSRV(service, "tcp", dns)
 		if err != nil {
 			return err
@@ -91,15 +96,16 @@ func GetCluster(serviceScheme, service, name, dns string, apurls types.URLs) ([]
 			}
 		}
 
-        // 返回最后的错误吗
+        // 返回最后的错误码
 		if len(stringParts) == 0 {
 			return err
 		}
 
+        // 成功
 		return nil
 	}
 
-    // 
+    // 去dns 更新节点map，根据服务名和scheme
 	err := updateNodeMap(service, serviceScheme)
 	if err != nil {
 		return nil, fmt.Errorf("error querying DNS SRV records for _%s %s", service, err)

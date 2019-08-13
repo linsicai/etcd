@@ -22,11 +22,13 @@ import (
 
 // ValidateSecureEndpoints scans the given endpoints against tls info, returning only those
 // endpoints that could be validated as secure.
+// 验证安全终端
 func ValidateSecureEndpoints(tlsInfo TLSInfo, eps []string) ([]string, error) {
 	t, err := NewTransport(tlsInfo, 5*time.Second)
 	if err != nil {
 		return nil, err
 	}
+
 	var errs []string
 	var endpoints []string
 	for _, ep := range eps {

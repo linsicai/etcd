@@ -149,8 +149,10 @@ func newGRPCProxyStartCommand() *cobra.Command {
 }
 
 func startGRPCProxy(cmd *cobra.Command, args []string) {
+    // 检查参数
     checkArgs()
 
+    // 日志配置
 	lcfg := zap.Config{
 		Level:       zap.NewAtomicLevelAt(zap.InfoLevel),
 		Development: false,
@@ -169,12 +171,14 @@ func startGRPCProxy(cmd *cobra.Command, args []string) {
 		grpc.EnableTracing = true
 	}
 
+    // 设置本地日志
 	lg, err := lcfg.Build()
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer lg.Sync()
 
+    // 设置远程日志
 	var gl grpclog.LoggerV2
 	gl, err = logutil.NewGRPCLoggerV2(lcfg)
 	if err != nil {
@@ -182,6 +186,7 @@ func startGRPCProxy(cmd *cobra.Command, args []string) {
 	}
 	grpclog.SetLoggerV2(gl)
 
+    // tls 配置
 	tlsinfo := newTLS(grpcProxyListenCA, grpcProxyListenCert, grpcProxyListenKey)
 	if tlsinfo == nil && grpcProxyListenAutoTLS {
 		host := []string{"https://" + grpcProxyListenAddr}
@@ -195,6 +200,8 @@ func startGRPCProxy(cmd *cobra.Command, args []string) {
 	if tlsinfo != nil {
 		lg.Info("gRPC proxy server TLS", zap.String("tls-info", fmt.Sprintf("%+v", tlsinfo)))
 	}
+
+    // http 监听
 	m := mustListenCMux(lg, tlsinfo)
 
 	grpcl := m.Match(cmux.HTTP2())
@@ -235,6 +242,7 @@ func startGRPCProxy(cmd *cobra.Command, args []string) {
 	os.Exit(1)
 }
 
+// 校验参数冲突
 func checkArgs() {
 	if grpcProxyResolverPrefix != "" && grpcProxyResolverTTL < 1 {
 		fmt.Fprintln(os.Stderr, fmt.Errorf("invalid resolver-ttl %d", grpcProxyResolverTTL))
@@ -251,35 +259,45 @@ func checkArgs() {
 }
 
 func mustNewClient(lg *zap.Logger) *clientv3.Client {
+    // 找客户端列表
 	srvs := discoverEndpoints(lg, grpcProxyDNSCluster, grpcProxyCA, grpcProxyInsecureDiscovery, grpcProxyDNSClusterServiceName)
 	eps := srvs.Endpoints
 	if len(eps) == 0 {
 		eps = grpcProxyEndpoints
 	}
+
+    // 新建客户端配置
 	cfg, err := newClientCfg(lg, eps)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+
+    // 设置客户端默认配置
 	cfg.DialOptions = append(cfg.DialOptions,
 		grpc.WithUnaryInterceptor(grpcproxy.AuthUnaryClientInterceptor))
 	cfg.DialOptions = append(cfg.DialOptions,
 		grpc.WithStreamInterceptor(grpcproxy.AuthStreamClientInterceptor))
+
+    // 新建客户端
 	client, err := clientv3.New(*cfg)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+
 	return client
 }
 
 func newClientCfg(lg *zap.Logger, eps []string) (*clientv3.Config, error) {
 	// set tls if any one tls option set
+	// 基本配置，eps 和超时时间
 	cfg := clientv3.Config{
 		Endpoints:   eps,
 		DialTimeout: 5 * time.Second,
 	}
 
+    // 通信包大小配置
 	if grpcMaxCallSendMsgSize > 0 {
 		cfg.MaxCallSendMsgSize = grpcMaxCallSendMsgSize
 	}
@@ -287,11 +305,13 @@ func newClientCfg(lg *zap.Logger, eps []string) (*clientv3.Config, error) {
 		cfg.MaxCallRecvMsgSize = grpcMaxCallRecvMsgSize
 	}
 
+    // 设置tls 配置
 	tls := newTLS(grpcProxyCA, grpcProxyCert, grpcProxyKey)
 	if tls == nil && grpcProxyInsecureSkipTLSVerify {
 		tls = &transport.TLSInfo{}
 	}
 	if tls != nil {
+	    // 设置客户端tls 配置
 		clientTLS, err := tls.ClientConfig()
 		if err != nil {
 			return nil, err
@@ -300,28 +320,34 @@ func newClientCfg(lg *zap.Logger, eps []string) (*clientv3.Config, error) {
 		cfg.TLS = clientTLS
 		lg.Info("gRPC proxy client TLS", zap.String("tls-info", fmt.Sprintf("%+v", tls)))
 	}
+
 	return &cfg, nil
 }
 
+// tls 配置
 func newTLS(ca, cert, key string) *transport.TLSInfo {
 	if ca == "" && cert == "" && key == "" {
 		return nil
 	}
+
 	return &transport.TLSInfo{TrustedCAFile: ca, CertFile: cert, KeyFile: key}
 }
 
 func mustListenCMux(lg *zap.Logger, tlsinfo *transport.TLSInfo) cmux.CMux {
+    // 创建监听
 	l, err := net.Listen("tcp", grpcProxyListenAddr)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 
+    // 设置keepalive
 	if l, err = transport.NewKeepAliveListener(l, "tcp", nil); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 	if tlsinfo != nil {
+	    // 设置加密
 		tlsinfo.CRLFile = grpcProxyListenCRL
 		if l, err = transport.NewTLSListener(l, tlsinfo); err != nil {
 			lg.Fatal("failed to create TLS listener", zap.Error(err))
@@ -334,6 +360,7 @@ func mustListenCMux(lg *zap.Logger, tlsinfo *transport.TLSInfo) cmux.CMux {
 
 func newGRPCProxyServer(lg *zap.Logger, client *clientv3.Client) *grpc.Server {
 	if grpcProxyEnableOrdering {
+	    // 顺序启动
 		vf := ordering.NewOrderViolationSwitchEndpointClosure(*client)
 		client.KV = ordering.NewKV(client.KV, vf)
 		lg.Info("waiting for linearized read from cluster to recover ordering")
@@ -348,15 +375,18 @@ func newGRPCProxyServer(lg *zap.Logger, client *clientv3.Client) *grpc.Server {
 	}
 
 	if len(grpcProxyNamespace) > 0 {
+	    // 命名空间kv
 		client.KV = namespace.NewKV(client.KV, grpcProxyNamespace)
 		client.Watcher = namespace.NewWatcher(client.Watcher, grpcProxyNamespace)
 		client.Lease = namespace.NewLease(client.Lease, grpcProxyNamespace)
 	}
 
 	if len(grpcProxyLeasing) > 0 {
+	    // 客户端有名租约
 		client.KV, _, _ = leasing.NewKV(client, grpcProxyLeasing)
 	}
 
+    // 代理方法
 	kvp, _ := grpcproxy.NewKvProxy(client)
 	watchp, _ := grpcproxy.NewWatchProxy(client)
 	if grpcProxyResolverPrefix != "" {
@@ -369,12 +399,13 @@ func newGRPCProxyServer(lg *zap.Logger, client *clientv3.Client) *grpc.Server {
 	electionp := grpcproxy.NewElectionProxy(client)
 	lockp := grpcproxy.NewLockProxy(client)
 
+    // grpc 服务
 	server := grpc.NewServer(
 		grpc.StreamInterceptor(grpc_prometheus.StreamServerInterceptor),
 		grpc.UnaryInterceptor(grpc_prometheus.UnaryServerInterceptor),
 		grpc.MaxConcurrentStreams(math.MaxUint32),
 	)
-
+    // 注册服务
 	pb.RegisterKVServer(server, kvp)
 	pb.RegisterWatchServer(server, watchp)
 	pb.RegisterClusterServer(server, clusterp)
@@ -385,6 +416,7 @@ func newGRPCProxyServer(lg *zap.Logger, client *clientv3.Client) *grpc.Server {
 	v3lockpb.RegisterLockServer(server, lockp)
 
 	// set zero values for metrics registered for this grpc server
+	// 注册监控
 	grpc_prometheus.Register(server)
 
 	return server
@@ -393,8 +425,12 @@ func newGRPCProxyServer(lg *zap.Logger, client *clientv3.Client) *grpc.Server {
 func mustHTTPListener(lg *zap.Logger, m cmux.CMux, tlsinfo *transport.TLSInfo, c *clientv3.Client) (*http.Server, net.Listener) {
 	httpmux := http.NewServeMux()
 	httpmux.HandleFunc("/", http.NotFound)
+
 	etcdhttp.HandlePrometheus(httpmux)
+
 	grpcproxy.HandleHealth(httpmux, c)
+
+    // 性能指标
 	if grpcProxyEnablePprof {
 		for p, h := range debugutil.PProfHandlers() {
 			httpmux.Handle(p, h)
@@ -410,25 +446,31 @@ func mustHTTPListener(lg *zap.Logger, m cmux.CMux, tlsinfo *transport.TLSInfo, c
 		return srvhttp, m.Match(cmux.HTTP1())
 	}
 
+    // 设置服务端tls 配置
 	srvTLS, err := tlsinfo.ServerConfig()
 	if err != nil {
 		lg.Fatal("failed to set up TLS", zap.Error(err))
 	}
 	srvhttp.TLSConfig = srvTLS
+
 	return srvhttp, m.Match(cmux.Any())
 }
 
 func mustMetricsListener(lg *zap.Logger, tlsinfo *transport.TLSInfo) net.Listener {
+    // 解析监听地址
 	murl, err := url.Parse(grpcProxyMetricsListenAddr)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "cannot parse %q", grpcProxyMetricsListenAddr)
 		os.Exit(1)
 	}
+
+    // 创建监听者
 	ml, err := transport.NewListener(murl.Host, murl.Scheme, tlsinfo)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 	lg.Info("gRPC proxy listening for metrics", zap.String("address", murl.String()))
-	return ml
+
+    return ml
 }

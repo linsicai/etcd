@@ -23,43 +23,43 @@ import (
 )
 
 func getMergedPerms(lg *zap.Logger, tx backend.BatchTx, userName string) *unifiedRangePermissions {
-    // 查找用户
+	// 查找用户
 	user := getUser(lg, tx, userName)
 	if user == nil {
-	    // 找不到
+		// 找不到
 		return nil
 	}
 
-    // 初始化
+	// 初始化
 	readPerms := &adt.IntervalTree{}
 	writePerms := &adt.IntervalTree{}
 
-    // 遍历用户角色
+	// 遍历用户角色
 	for _, roleName := range user.Roles {
 		role := getRole(tx, roleName)
 		if role == nil {
-		    // 没有这个角色
+			// 没有这个角色
 			continue
 		}
 
-        // 遍历角色权限
+		// 遍历角色权限
 		for _, perm := range role.KeyPermission {
 			var ivl adt.Interval
 			var rangeEnd []byte
 
-            // 范围权限
+			// 范围权限
 			if len(perm.RangeEnd) != 1 || perm.RangeEnd[0] != 0 {
 				rangeEnd = perm.RangeEnd
 			}
 
-            // 取adt
+			// 取adt
 			if len(perm.RangeEnd) != 0 {
 				ivl = adt.NewBytesAffineInterval(perm.Key, rangeEnd)
 			} else {
 				ivl = adt.NewBytesAffinePoint(perm.Key)
 			}
 
-            // 插入到权限列表中
+			// 插入到权限列表中
 			switch perm.PermType {
 			case authpb.READWRITE:
 				readPerms.Insert(ivl, struct{}{})
@@ -91,7 +91,7 @@ func checkKeyInterval(
 		rangeEnd = nil
 	}
 
-    // 找个列表查找
+	// 找个列表查找
 	ivl := adt.NewBytesAffineInterval(key, rangeEnd)
 	switch permtyp {
 	case authpb.READ:
@@ -132,7 +132,7 @@ func (as *authStore) isRangeOpPermitted(tx backend.BatchTx, userName string, key
 	// assumption: tx is Lock()ed
 	_, ok := as.rangePermCache[userName]
 	if !ok {
-	    // 从后端加载
+		// 从后端加载
 		perms := getMergedPerms(as.lg, tx, userName)
 		if perms == nil {
 			if as.lg != nil {
@@ -149,11 +149,11 @@ func (as *authStore) isRangeOpPermitted(tx backend.BatchTx, userName string, key
 	}
 
 	if len(rangeEnd) == 0 {
-	    // 单点校验
+		// 单点校验
 		return checkKeyPoint(as.lg, as.rangePermCache[userName], key, permtyp)
 	}
 
-    // 范围校验
+	// 范围校验
 	return checkKeyInterval(as.lg, as.rangePermCache[userName], key, rangeEnd, permtyp)
 }
 

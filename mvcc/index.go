@@ -44,7 +44,7 @@ type treeIndex struct {
 
 	tree *btree.BTree // btree
 
-	lg   *zap.Logger // 日志
+	lg *zap.Logger // 日志
 }
 
 func newTreeIndex(lg *zap.Logger) index {
@@ -55,43 +55,43 @@ func newTreeIndex(lg *zap.Logger) index {
 }
 
 func (ti *treeIndex) Put(key []byte, rev revision) {
-    // key
+	// key
 	keyi := &keyIndex{key: key}
 
-    // 加锁
+	// 加锁
 	ti.Lock()
 	defer ti.Unlock()
 
-    // 找key 值
+	// 找key 值
 	item := ti.tree.Get(keyi)
 	if item == nil {
-	    // 更新存储
+		// 更新存储
 		keyi.put(ti.lg, rev.main, rev.sub)
 
-        // 更新索引
+		// 更新索引
 		ti.tree.ReplaceOrInsert(keyi)
 		return
 	}
 
-    // 写kv
+	// 写kv
 	okeyi := item.(*keyIndex)
 	okeyi.put(ti.lg, rev.main, rev.sub)
 }
 
 func (ti *treeIndex) Get(key []byte, atRev int64) (modified, created revision, ver int64, err error) {
-    // 拼key
+	// 拼key
 	keyi := &keyIndex{key: key}
 
-    // 加锁
+	// 加锁
 	ti.RLock()
 	defer ti.RUnlock()
 
 	if keyi = ti.keyIndex(keyi); keyi == nil {
-	    // 找不到
+		// 找不到
 		return revision{}, revision{}, 0, ErrRevisionNotFound
 	}
 
-    // 找到了
+	// 找到了
 	return keyi.get(ti.lg, atRev)
 }
 
@@ -99,7 +99,7 @@ func (ti *treeIndex) KeyIndex(keyi *keyIndex) *keyIndex {
 	ti.RLock()
 	defer ti.RUnlock()
 
-    // 转调用
+	// 转调用
 	return ti.keyIndex(keyi)
 }
 
@@ -113,21 +113,21 @@ func (ti *treeIndex) keyIndex(keyi *keyIndex) *keyIndex {
 }
 
 func (ti *treeIndex) visit(key, end []byte, f func(ki *keyIndex)) {
-    // [begin, end)
+	// [begin, end)
 	keyi, endi := &keyIndex{key: key}, &keyIndex{key: end}
 
-    // 加锁
+	// 加锁
 	ti.RLock()
 	defer ti.RUnlock()
 
-    // 访问树
+	// 访问树
 	ti.tree.AscendGreaterOrEqual(keyi, func(item btree.Item) bool {
-	    // 终点判断
+		// 终点判断
 		if len(endi.key) > 0 && !item.Less(endi) {
 			return false
 		}
 
-        // 访问
+		// 访问
 		f(item.(*keyIndex))
 		return true
 	})
@@ -135,7 +135,7 @@ func (ti *treeIndex) visit(key, end []byte, f func(ki *keyIndex)) {
 
 func (ti *treeIndex) Revisions(key, end []byte, atRev int64) (revs []revision) {
 	if end == nil {
-	    // 单点处理
+		// 单点处理
 		rev, _, _, err := ti.Get(key, atRev)
 		if err != nil {
 			return nil
@@ -143,7 +143,7 @@ func (ti *treeIndex) Revisions(key, end []byte, atRev int64) (revs []revision) {
 		return []revision{rev}
 	}
 
-    // 获取版本号
+	// 获取版本号
 	ti.visit(key, end, func(ki *keyIndex) {
 		if rev, _, _, err := ki.get(ti.lg, atRev); err == nil {
 			revs = append(revs, rev)
@@ -154,7 +154,7 @@ func (ti *treeIndex) Revisions(key, end []byte, atRev int64) (revs []revision) {
 
 func (ti *treeIndex) Range(key, end []byte, atRev int64) (keys [][]byte, revs []revision) {
 	if end == nil {
-	    // 单点处理
+		// 单点处理
 		rev, _, _, err := ti.Get(key, atRev)
 		if err != nil {
 			return nil, nil
@@ -162,7 +162,7 @@ func (ti *treeIndex) Range(key, end []byte, atRev int64) (keys [][]byte, revs []
 		return [][]byte{key}, []revision{rev}
 	}
 
-    // 获取版本号和key
+	// 获取版本号和key
 	ti.visit(key, end, func(ki *keyIndex) {
 		if rev, _, _, err := ki.get(ti.lg, atRev); err == nil {
 			revs = append(revs, rev)
@@ -176,17 +176,17 @@ func (ti *treeIndex) Range(key, end []byte, atRev int64) (keys [][]byte, revs []
 func (ti *treeIndex) Tombstone(key []byte, rev revision) error {
 	keyi := &keyIndex{key: key}
 
-    // 加锁
+	// 加锁
 	ti.Lock()
 	defer ti.Unlock()
 
-    // 找一下
+	// 找一下
 	item := ti.tree.Get(keyi)
 	if item == nil {
 		return ErrRevisionNotFound
 	}
 
-    // 里程碑
+	// 里程碑
 	ki := item.(*keyIndex)
 	return ki.tombstone(ti.lg, rev.main, rev.sub)
 }
@@ -197,12 +197,12 @@ func (ti *treeIndex) Tombstone(key []byte, rev revision) error {
 func (ti *treeIndex) RangeSince(key, end []byte, rev int64) []revision {
 	keyi := &keyIndex{key: key}
 
-    // 加锁
+	// 加锁
 	ti.RLock()
 	defer ti.RUnlock()
 
 	if end == nil {
-	    // 单点
+		// 单点
 		item := ti.tree.Get(keyi)
 		if item == nil {
 			return nil
@@ -211,7 +211,7 @@ func (ti *treeIndex) RangeSince(key, end []byte, rev int64) []revision {
 		return keyi.since(ti.lg, rev)
 	}
 
-    // 遍历
+	// 遍历
 	endi := &keyIndex{key: end}
 	var revs []revision
 	ti.tree.AscendGreaterOrEqual(keyi, func(item btree.Item) bool {
@@ -229,7 +229,7 @@ func (ti *treeIndex) RangeSince(key, end []byte, rev int64) []revision {
 
 // 压缩
 func (ti *treeIndex) Compact(rev int64) map[revision]struct{} {
-    // 可用为空
+	// 可用为空
 	available := make(map[revision]struct{})
 	if ti.lg != nil {
 		ti.lg.Info("compact tree index", zap.Int64("revision", rev))
@@ -237,7 +237,7 @@ func (ti *treeIndex) Compact(rev int64) map[revision]struct{} {
 		plog.Printf("store.index: compact %d", rev)
 	}
 
-    // 复制树
+	// 复制树
 	ti.Lock()
 	clone := ti.tree.Clone()
 	ti.Unlock()
@@ -249,10 +249,10 @@ func (ti *treeIndex) Compact(rev int64) map[revision]struct{} {
 		//compaction is going on or revision added to empty before deletion
 		ti.Lock()
 
-        // 压缩key
+		// 压缩key
 		keyi.compact(ti.lg, rev, available)
 		if keyi.isEmpty() {
-		    // 删除索引
+			// 删除索引
 			item := ti.tree.Delete(keyi)
 			if item == nil {
 				if ti.lg != nil {
@@ -274,11 +274,11 @@ func (ti *treeIndex) Compact(rev int64) map[revision]struct{} {
 func (ti *treeIndex) Keep(rev int64) map[revision]struct{} {
 	available := make(map[revision]struct{})
 
-    // 加锁
+	// 加锁
 	ti.RLock()
 	defer ti.RUnlock()
 
-    // 遍历树
+	// 遍历树
 	ti.tree.Ascend(func(i btree.Item) bool {
 		keyi := i.(*keyIndex)
 		keyi.keep(rev, available)
@@ -289,17 +289,17 @@ func (ti *treeIndex) Keep(rev int64) map[revision]struct{} {
 }
 
 func (ti *treeIndex) Equal(bi index) bool {
-    // 类型转换
+	// 类型转换
 	b := bi.(*treeIndex)
 
-    // 看长度
+	// 看长度
 	if ti.tree.Len() != b.tree.Len() {
 		return false
 	}
 
 	equal := true
 
-    // 遍历树判断
+	// 遍历树判断
 	ti.tree.Ascend(func(item btree.Item) bool {
 		aki := item.(*keyIndex)
 		bki := b.tree.Get(item).(*keyIndex)

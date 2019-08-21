@@ -17,17 +17,17 @@ package mvcc
 import "go.etcd.io/etcd/mvcc/mvccpb"
 
 func (tw *watchableStoreTxnWrite) End() {
-    // 没有变更，事务结束
 	changes := tw.Changes()
 	if len(changes) == 0 {
+		// 没有变更，事务结束
 		tw.TxnWrite.End()
 		return
 	}
 
-    // 版本号递增
+	// 版本号递增
 	rev := tw.Rev() + 1
 
-    // 变更转事件
+	// 变更转事件
 	evs := make([]mvccpb.Event, len(changes))
 	for i, change := range changes {
 		evs[i].Kv = &changes[i]
@@ -41,9 +41,10 @@ func (tw *watchableStoreTxnWrite) End() {
 
 	// end write txn under watchable store lock so the updates are visible
 	// when asynchronous event posting checks the current store revision
-	// 加锁发通知
 	tw.s.mu.Lock()
+	// 发通知
 	tw.s.notify(rev, evs)
+	// 事务结果
 	tw.TxnWrite.End()
 	tw.s.mu.Unlock()
 }
@@ -55,5 +56,5 @@ type watchableStoreTxnWrite struct {
 }
 
 func (s *watchableStore) Write() TxnWrite {
-    return &watchableStoreTxnWrite{s.store.Write(), s} 
+	return &watchableStoreTxnWrite{s.store.Write(), s}
 }

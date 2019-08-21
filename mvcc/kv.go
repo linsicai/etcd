@@ -22,20 +22,20 @@ import (
 
 // 范围选项
 type RangeOptions struct {
-    // 
+	//
 	Limit int64
 
-    // 版本？
-	Rev   int64
+	// 版本？
+	Rev int64
 
 	Count bool
 }
 
 // 范围结果
 type RangeResult struct {
-	KVs   []mvccpb.KeyValue
+	KVs []mvccpb.KeyValue
 
-	Rev   int64
+	Rev int64
 
 	Count int
 }
@@ -107,28 +107,28 @@ type TxnWrite interface {
 
 // txnReadWrite coerces a read txn to a write, panicking on any write operation.
 type txnReadWrite struct {
-    TxnRead
+	TxnRead
 }
 
 func (trw *txnReadWrite) DeleteRange(key, end []byte) (n, rev int64) {
-    // 抛异常
-    panic("unexpected DeleteRange")
+	// 抛异常
+	panic("unexpected DeleteRange")
 }
 func (trw *txnReadWrite) Put(key, value []byte, lease lease.LeaseID) (rev int64) {
 	panic("unexpected Put")
 }
 func (trw *txnReadWrite) Changes() []mvccpb.KeyValue {
-    return nil
+	return nil
 }
 
 // 只读写事务
 func NewReadOnlyTxnWrite(txn TxnRead) TxnWrite {
-    return &txnReadWrite{txn}
+	return &txnReadWrite{txn}
 }
 
 // kv 接口
 type KV interface {
-    // 读写视图
+	// 读写视图
 	ReadView
 	WriteView
 
@@ -160,7 +160,7 @@ type KV interface {
 	// 恢复
 	Restore(b backend.Backend) error
 
-    // 关闭
+	// 关闭
 	Close() error
 }
 

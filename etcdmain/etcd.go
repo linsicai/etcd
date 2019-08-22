@@ -48,8 +48,11 @@ type dirType string
 var plog = capnslog.NewPackageLogger("go.etcd.io/etcd", "etcdmain")
 
 var (
+    // 成员
     dirMember = dirType("member")
+    // 代理
     dirProxy  = dirType("proxy")
+    // 空的？
     dirEmpty  = dirType("empty")
 )
 
@@ -299,6 +302,7 @@ func startEtcdOrProxyV2() {
     // connections.
     notifySystemd(lg)
 
+    // 等待结束
     select {
     case lerr := <-errc:
         // fatal out on listener errors

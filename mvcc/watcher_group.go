@@ -29,18 +29,25 @@ var (
 	watchBatchMaxRevs = 1000
 )
 
+// 批量事件
 type eventBatch struct {
 	// evs is a batch of revision-ordered events
+	// 事件列表
 	evs []mvccpb.Event
+
 	// revs is the minimum unique revisions observed for this batch
+	// 版本数
 	revs int
+
 	// moreRev is first revision with more events following this batch
+	// 下一个版本
 	moreRev int64
 }
 
 func (eb *eventBatch) add(ev mvccpb.Event) {
 	if eb.revs > watchBatchMaxRevs {
 		// maxed out batch size
+		// 事件满了
 		return
 	}
 
@@ -55,8 +62,10 @@ func (eb *eventBatch) add(ev mvccpb.Event) {
 	ebRev := eb.evs[len(eb.evs)-1].Kv.ModRevision
 	evRev := ev.Kv.ModRevision
 	if evRev > ebRev {
+	    // 新的版本
 		eb.revs++
 		if eb.revs > watchBatchMaxRevs {
+		    // 满了
 			eb.moreRev = evRev
 			return
 		}
@@ -67,12 +76,14 @@ func (eb *eventBatch) add(ev mvccpb.Event) {
 
 type watcherBatch map[*watcher]*eventBatch
 
+// 加事件
 func (wb watcherBatch) add(w *watcher, ev mvccpb.Event) {
 	eb := wb[w]
 	if eb == nil {
 		eb = &eventBatch{}
 		wb[w] = eb
 	}
+
 	eb.add(ev)
 }
 
@@ -80,6 +91,7 @@ func (wb watcherBatch) add(w *watcher, ev mvccpb.Event) {
 // events look up by watcher.
 func newWatcherBatch(wg *watcherGroup, evs []mvccpb.Event) watcherBatch {
 	if len(wg.watchers) == 0 {
+	    // 没有watch
 		return nil
 	}
 
@@ -95,8 +107,8 @@ func newWatcherBatch(wg *watcherGroup, evs []mvccpb.Event) watcherBatch {
 	return wb
 }
 
+// 监听集
 type watcherSet map[*watcher]struct{}
-
 func (w watcherSet) add(wa *watcher) {
 	if _, ok := w[wa]; ok {
 		panic("add watcher twice!")
@@ -117,8 +129,8 @@ func (w watcherSet) delete(wa *watcher) {
 	delete(w, wa)
 }
 
+// 监听映射表
 type watcherSetByKey map[string]watcherSet
-
 func (w watcherSetByKey) add(wa *watcher) {
 	set := w[string(wa.key)]
 	if set == nil {
@@ -144,12 +156,16 @@ func (w watcherSetByKey) delete(wa *watcher) bool {
 }
 
 // watcherGroup is a collection of watchers organized by their ranges
+// 监听组
 type watcherGroup struct {
 	// keyWatchers has the watchers that watch on a single key
+	// 监听单个key
 	keyWatchers watcherSetByKey
 	// ranges has the watchers that watch a range; it is sorted by interval
+	// 监控范围
 	ranges adt.IntervalTree
 	// watchers is the set of all watchers
+	// 所有的监听者
 	watchers watcherSet
 }
 
@@ -222,8 +238,11 @@ func (wg *watcherGroup) delete(wa *watcher) bool {
 // choose selects watchers from the watcher group to update
 func (wg *watcherGroup) choose(maxWatchers int, curRev, compactRev int64) (*watcherGroup, int64) {
 	if len(wg.watchers) < maxWatchers {
+	    // 选全部
 		return wg, wg.chooseAll(curRev, compactRev)
 	}
+
+    // 选最大监听者
 	ret := newWatcherGroup()
 	for w := range wg.watchers {
 		if maxWatchers <= 0 {
@@ -232,6 +251,7 @@ func (wg *watcherGroup) choose(maxWatchers int, curRev, compactRev int64) (*watc
 		maxWatchers--
 		ret.add(w)
 	}
+
 	return &ret, ret.chooseAll(curRev, compactRev)
 }
 
@@ -272,6 +292,7 @@ func (wg *watcherGroup) watcherSetByKey(key string) watcherSet {
 	wranges := wg.ranges.Stab(adt.NewStringAffinePoint(key))
 
 	// zero-copy cases
+	// 不需要merge 的处理
 	switch {
 	case len(wranges) == 0:
 		// no need to merge ranges or copy; reuse single-key set
@@ -283,6 +304,7 @@ func (wg *watcherGroup) watcherSetByKey(key string) watcherSet {
 	}
 
 	// copy case
+	// 合并所有watcher
 	ret := make(watcherSet)
 	ret.union(wg.keyWatchers[key])
 	for _, item := range wranges {

@@ -32,9 +32,11 @@ var (
 	ErrWatcherDuplicateID = errors.New("mvcc: duplicate watch ID provided on the WatchStream")
 )
 
+// ID
 type WatchID int64
 
 // FilterFunc returns true if the given event should be filtered out.
+// 过滤函数
 type FilterFunc func(e mvccpb.Event) bool
 
 type WatchStream interface {
@@ -48,9 +50,11 @@ type WatchStream interface {
 	// in events that are sent to the created watcher through stream channel.
 	// The watch ID is used when it's not equal to AutoWatchID. Otherwise,
 	// an auto-generated watch ID is returned.
+	// 创建监听
 	Watch(id WatchID, key, end []byte, startRev int64, fcs ...FilterFunc) (WatchID, error)
 
 	// Chan returns a chan. All watch response will be sent to the returned chan.
+	// 监听通道
 	Chan() <-chan WatchResponse
 
 	// RequestProgress requests the progress of the watcher with given ID. The response
@@ -63,20 +67,26 @@ type WatchStream interface {
 
 	// Cancel cancels a watcher by giving its ID. If watcher does not exist, an error will be
 	// returned.
+	// 取消监听
 	Cancel(id WatchID) error
 
 	// Close closes Chan and release all related resources.
+	// 关闭
 	Close()
 
 	// Rev returns the current revision of the KV the stream watches on.
+	// 当前版本
 	Rev() int64
 }
 
+// 监听结果
 type WatchResponse struct {
 	// WatchID is the WatchID of the watcher this response sent to.
+	// 监听ID
 	WatchID WatchID
 
 	// Events contains all the events that needs to send.
+	// 监听事件列表
 	Events []mvccpb.Event
 
 	// Revision is the revision of the KV when the watchResponse is created.
@@ -84,30 +94,37 @@ type WatchResponse struct {
 	// modified revision inside Events. For a delayed response to a unsynced
 	// watcher, the revision is greater than the last modified revision
 	// inside Events.
+	// 版本
+	// 正常情况下是事件列表中最后的修改版本
+	// 延时情况下，版本会大
 	Revision int64
 
 	// CompactRevision is set when the watcher is cancelled due to compaction.
+	// 压缩版本
 	CompactRevision int64
 }
 
 // watchStream contains a collection of watchers that share
 // one streaming chan to send out watched events and other control events.
+// 监听流
 type watchStream struct {
-	watchable watchable
-	ch        chan WatchResponse
+	watchable watchable // 可监听
+	ch        chan WatchResponse // 结果通道
 
 	mu sync.Mutex // guards fields below it
 	// nextID is the ID pre-allocated for next new watcher in this stream
-	nextID   WatchID
+	nextID   WatchID // 预取监听ID
 	closed   bool
-	cancels  map[WatchID]cancelFunc
-	watchers map[WatchID]*watcher
+
+	cancels  map[WatchID]cancelFunc // 取消函数
+	watchers map[WatchID]*watcher // 监听者
 }
 
 // Watch creates a new watcher in the stream and returns its WatchID.
 func (ws *watchStream) Watch(id WatchID, key, end []byte, startRev int64, fcs ...FilterFunc) (WatchID, error) {
 	// prevent wrong range where key >= end lexicographically
 	// watch request with 'WithFromKey' has empty-byte range end
+	// 参数检查
 	if len(end) != 0 && bytes.Compare(key, end) != -1 {
 		return -1, ErrEmptyWatcherRange
 	}
@@ -118,6 +135,7 @@ func (ws *watchStream) Watch(id WatchID, key, end []byte, startRev int64, fcs ..
 		return -1, ErrEmptyWatcherRange
 	}
 
+    // 确定监听ID
 	if id == AutoWatchID {
 		for ws.watchers[ws.nextID] != nil {
 			ws.nextID++
@@ -128,6 +146,7 @@ func (ws *watchStream) Watch(id WatchID, key, end []byte, startRev int64, fcs ..
 		return -1, ErrWatcherDuplicateID
 	}
 
+    // 创建监听
 	w, c := ws.watchable.watch(key, end, startRev, id, ws.ch, fcs...)
 
 	ws.cancels[id] = c
@@ -147,14 +166,17 @@ func (ws *watchStream) Cancel(id WatchID) error {
 	ws.mu.Unlock()
 
 	if !ok {
+	    // 没有这个ID
 		return ErrWatcherNotExist
 	}
+	// 调用取消函数
 	cancel()
 
 	ws.mu.Lock()
 	// The watch isn't removed until cancel so that if Close() is called,
 	// it will wait for the cancel. Otherwise, Close() could close the
 	// watch channel while the store is still posting events.
+	// 删除映射表
 	if ww := ws.watchers[id]; ww == w {
 		delete(ws.cancels, id)
 		delete(ws.watchers, id)
@@ -168,11 +190,16 @@ func (ws *watchStream) Close() {
 	ws.mu.Lock()
 	defer ws.mu.Unlock()
 
+    // 取消全部
 	for _, cancel := range ws.cancels {
 		cancel()
 	}
+
+    // 设置关闭
 	ws.closed = true
+	// 关闭通道
 	close(ws.ch)
+
 	watchStreamGauge.Dec()
 }
 
@@ -189,5 +216,6 @@ func (ws *watchStream) RequestProgress(id WatchID) {
 	if !ok {
 		return
 	}
+
 	ws.watchable.progress(w)
 }

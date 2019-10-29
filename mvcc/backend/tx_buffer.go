@@ -20,6 +20,7 @@ import (
 )
 
 // txBuffer handles functionality shared between txWriteBuffer and txReadBuffer.
+// 事务buffer
 type txBuffer struct {
 	buckets map[string]*bucketBuffer
 }
@@ -37,6 +38,7 @@ func (txb *txBuffer) reset() {
 }
 
 // txWriteBuffer buffers writes of pending updates that have not yet committed.
+// 写事务buffer
 type txWriteBuffer struct {
 	txBuffer
 	seq bool
@@ -87,7 +89,7 @@ func (txw *txWriteBuffer) writeback(txr *txReadBuffer) {
 }
 
 // txReadBuffer accesses buffered updates.
-// 写缓存
+// 读缓存
 type txReadBuffer struct {
     txBuffer
 }

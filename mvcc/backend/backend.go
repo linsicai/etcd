@@ -32,10 +32,10 @@ import (
 )
 
 var (
-    // 批量限制
-	defaultBatchLimit    = 10000
+	// 批量限制
+	defaultBatchLimit = 10000
 
-    // 批量间隔
+	// 批量间隔
 	defaultBatchInterval = 100 * time.Millisecond
 
 	defragLimit = 10000
@@ -54,13 +54,13 @@ var (
 )
 
 type Backend interface {
-    // 读通道
+	// 读通道
 	ReadTx() ReadTx
 
-    // 批量
+	// 批量
 	BatchTx() BatchTx
 
-    // 快照
+	// 快照
 	Snapshot() Snapshot
 
 	Hash(ignores map[IgnoreKey]struct{}) (uint32, error)
@@ -84,15 +84,15 @@ type Backend interface {
 }
 
 type Snapshot interface {
-    // 大小
+	// 大小
 	// Size gets the size of the snapshot.
 	Size() int64
 
-    // 写接口
+	// 写接口
 	// WriteTo writes the snapshot into the given writer.
 	WriteTo(w io.Writer) (n int64, err error)
 
-    // 关闭
+	// 关闭
 	// Close closes the snapshot.
 	Close() error
 }
@@ -113,31 +113,31 @@ type backend struct {
 	// 提交数
 	commits int64
 
-    // 读写锁
+	// 读写锁
 	mu sync.RWMutex
 
-    // db
+	// db
 	db *bolt.DB
 
-    // 批量阈值
+	// 批量阈值
 	batchInterval time.Duration
 	batchLimit    int
 
-    // 读写通道
-	batchTx       *batchTxBuffered
-	readTx *readTx
+	// 读写通道
+	batchTx *batchTxBuffered
+	readTx  *readTx
 
-    // 结束信号量
+	// 结束信号量
 	stopc chan struct{}
 
-    // 退出信号量
+	// 退出信号量
 	donec chan struct{}
 
 	lg *zap.Logger
 }
 
 type BackendConfig struct {
-    // 文件路径
+	// 文件路径
 	// Path is the file path to the backend file.
 	Path string
 
@@ -174,14 +174,14 @@ func NewDefaultBackend(path string) Backend {
 }
 
 func newBackend(bcfg BackendConfig) *backend {
-    // bolt 配置
+	// bolt 配置
 	bopts := &bolt.Options{}
 	if boltOpenOptions != nil {
 		*bopts = *boltOpenOptions
 	}
 	bopts.InitialMmapSize = bcfg.mmapSize()
 
-    // 打开数据库
+	// 打开数据库
 	db, err := bolt.Open(bcfg.Path, 0600, bopts)
 	if err != nil {
 		if bcfg.Logger != nil {
@@ -214,7 +214,7 @@ func newBackend(bcfg BackendConfig) *backend {
 
 	b.batchTx = newBatchTxBuffered(b)
 
-    // 后台运行
+	// 后台运行
 	go b.run()
 
 	return b
@@ -228,7 +228,7 @@ func (b *backend) BatchTx() BatchTx {
 }
 
 func (b *backend) ReadTx() ReadTx {
-    return b.readTx
+	return b.readTx
 }
 
 // ForceCommit forces the current batching tx to commit.
@@ -237,14 +237,14 @@ func (b *backend) ForceCommit() {
 }
 
 func (b *backend) Snapshot() Snapshot {
-    // 提交
+	// 提交
 	b.batchTx.Commit()
 
-    // 读锁
+	// 读锁
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 
-    // 定位至开始？
+	// 定位至开始？
 	tx, err := b.db.Begin(false)
 	if err != nil {
 		if b.lg != nil {
@@ -258,9 +258,9 @@ func (b *backend) Snapshot() Snapshot {
 
 	dbBytes := tx.Size()
 
-    // 异步执行
+	// 异步执行
 	go func() {
-	    // 结束后触发信号量
+		// 结束后触发信号量
 		defer close(donec)
 
 		// sendRateBytes is based on transferring snapshot data over a 1 gigabit/s connection
@@ -272,7 +272,7 @@ func (b *backend) Snapshot() Snapshot {
 			warningTimeout = minSnapshotWarningTimeout
 		}
 
-        // 启动触发器
+		// 启动触发器
 		start := time.Now()
 		ticker := time.NewTicker(warningTimeout)
 		defer ticker.Stop()
@@ -280,7 +280,7 @@ func (b *backend) Snapshot() Snapshot {
 		for {
 			select {
 			case <-ticker.C:
-			    // 超时告警
+				// 超时告警
 				if b.lg != nil {
 					b.lg.Warn(
 						"snapshotting taking too long to transfer",
@@ -293,7 +293,7 @@ func (b *backend) Snapshot() Snapshot {
 				}
 
 			case <-stopc:
-			    // 被停止了，触发统计
+				// 被停止了，触发统计
 				snapshotTransferSec.Observe(time.Since(start).Seconds())
 				return
 			}
@@ -312,16 +312,16 @@ type IgnoreKey struct {
 func (b *backend) Hash(ignores map[IgnoreKey]struct{}) (uint32, error) {
 	h := crc32.New(crc32.MakeTable(crc32.Castagnoli))
 
-    // 读锁
+	// 读锁
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 
-    // 查看db
+	// 查看db
 	err := b.db.View(func(tx *bolt.Tx) error {
-	    // 创建cursor
+		// 创建cursor
 		c := tx.Cursor()
 
-        // 遍历
+		// 遍历
 		for next, _ := c.First(); next != nil; next, _ = c.Next() {
 			// 找桶
 			b := tx.Bucket(next)
@@ -329,10 +329,10 @@ func (b *backend) Hash(ignores map[IgnoreKey]struct{}) (uint32, error) {
 				return fmt.Errorf("cannot get hash of bucket %s", string(next))
 			}
 
-            // 遍历桶
+			// 遍历桶
 			h.Write(next)
 			b.ForEach(func(k, v []byte) error {
-			    // 忽略某些key
+				// 忽略某些key
 				bk := IgnoreKey{Bucket: string(next), Key: string(k)}
 				if _, ok := ignores[bk]; !ok {
 					h.Write(k)
@@ -360,10 +360,10 @@ func (b *backend) SizeInUse() int64 {
 }
 
 func (b *backend) run() {
-    // 结束时通知信号量
+	// 结束时通知信号量
 	defer close(b.donec)
 
-    // 创建定时器，结束时自动关闭
+	// 创建定时器，结束时自动关闭
 	t := time.NewTimer(b.batchInterval)
 	defer t.Stop()
 
@@ -371,30 +371,29 @@ func (b *backend) run() {
 		select {
 		case <-t.C: // 等定时器信号
 		case <-b.stopc:
-		    // 提交并停止提供服务
+			// 提交并停止提供服务
 			b.batchTx.CommitAndStop()
 			return
 		}
 
-        // 批量提交
+		// 批量提交
 		if b.batchTx.safePending() != 0 {
 			b.batchTx.Commit()
 		}
 
-      
-        // 重置定时器
+		// 重置定时器
 		t.Reset(b.batchInterval)
 	}
 }
 
 func (b *backend) Close() error {
-    // 通知停止
+	// 通知停止
 	close(b.stopc)
 
-    // 等待结束
+	// 等待结束
 	<-b.donec
 
-    // 关闭数据库
+	// 关闭数据库
 	return b.db.Close()
 }
 
@@ -428,18 +427,18 @@ func (b *backend) defrag() error {
 	b.readTx.mu.Lock()
 	defer b.readTx.mu.Unlock()
 
-    // 禁止提交
+	// 禁止提交
 	b.batchTx.unsafeCommit(true)
 
 	b.batchTx.tx = nil
 
-    // 创建临时db
+	// 创建临时db
 	tmpdb, err := bolt.Open(b.db.Path()+".tmp", 0600, boltOpenOptions)
 	if err != nil {
 		return err
 	}
 
-    // 打印基本信息
+	// 打印基本信息
 	dbp := b.db.Path()
 	tdbp := tmpdb.Path()
 	size1, sizeInUse1 := b.Size(), b.SizeInUse()
@@ -454,16 +453,16 @@ func (b *backend) defrag() error {
 		)
 	}
 
-    // 做碎片整理
+	// 做碎片整理
 	err = defragdb(b.db, tmpdb, defragLimit)
 	if err != nil {
-	    // 出错了
+		// 出错了
 		tmpdb.Close()
 		os.RemoveAll(tmpdb.Path())
 		return err
 	}
 
-    // 关db
+	// 关db
 	err = b.db.Close()
 	if err != nil {
 		if b.lg != nil {
@@ -491,7 +490,7 @@ func (b *backend) defrag() error {
 		}
 	}
 
-    // 打开新db
+	// 打开新db
 	b.db, err = bolt.Open(dbp, 0600, boltOpenOptions)
 	if err != nil {
 		if b.lg != nil {
@@ -501,24 +500,24 @@ func (b *backend) defrag() error {
 		}
 	}
 
-    // 批量提交
+	// 批量提交
 	b.batchTx.tx = b.unsafeBegin(true)
 
-    // 读通道重置
+	// 读通道重置
 	b.readTx.reset()
 	b.readTx.tx = b.unsafeBegin(false)
 
-    // 读取基本信息
+	// 读取基本信息
 	size := b.readTx.tx.Size()
 	db := b.readTx.tx.DB()
 	atomic.StoreInt64(&b.size, size)
 	atomic.StoreInt64(&b.sizeInUse, size-(int64(db.Stats().FreePageN)*int64(db.Info().PageSize)))
 
-    // 打点监控
+	// 打点监控
 	took := time.Since(now)
 	defragSec.Observe(took.Seconds())
 
-    // 打印基本信息
+	// 打印基本信息
 	size2, sizeInUse2 := b.Size(), b.SizeInUse()
 	if b.lg != nil {
 		b.lg.Info(
@@ -538,7 +537,7 @@ func (b *backend) defrag() error {
 }
 
 func defragdb(odb, tmpdb *bolt.DB, limit int) error {
-    // 打开临时db
+	// 打开临时db
 	// open a tx on tmpdb for writes
 	tmptx, err := tmpdb.Begin(true)
 	if err != nil {
@@ -554,10 +553,10 @@ func defragdb(odb, tmpdb *bolt.DB, limit int) error {
 	// 结束时回滚
 	defer tx.Rollback()
 
-    // 定义cursor
+	// 定义cursor
 	c := tx.Cursor()
 
-    // 遍历db
+	// 遍历db
 	count := 0
 	for next, _ := c.First(); next != nil; next, _ = c.Next() {
 		b := tx.Bucket(next)
@@ -565,18 +564,18 @@ func defragdb(odb, tmpdb *bolt.DB, limit int) error {
 			return fmt.Errorf("backend: cannot defrag bucket %s", string(next))
 		}
 
-        // 创建bucket
+		// 创建bucket
 		tmpb, berr := tmptx.CreateBucketIfNotExists(next)
 		if berr != nil {
 			return berr
 		}
 		tmpb.FillPercent = 0.9 // for seq write in for each
 
-        // 遍历块
+		// 遍历块
 		b.ForEach(func(k, v []byte) error {
 			count++
 			if count > limit {
-			    // 批量提交
+				// 批量提交
 				err = tmptx.Commit()
 				if err != nil {
 					return err
@@ -599,12 +598,12 @@ func defragdb(odb, tmpdb *bolt.DB, limit int) error {
 }
 
 func (b *backend) begin(write bool) *bolt.Tx {
-    // 读事务
+	// 读事务
 	b.mu.RLock()
 	tx := b.unsafeBegin(write)
 	b.mu.RUnlock()
 
-    // 统计
+	// 统计
 	size := tx.Size()
 	db := tx.DB()
 	atomic.StoreInt64(&b.size, size)
@@ -629,7 +628,7 @@ func (b *backend) unsafeBegin(write bool) *bolt.Tx {
 
 // NewTmpBackend creates a backend implementation for testing.
 func NewTmpBackend(batchInterval time.Duration, batchLimit int) (*backend, string) {
-    // 测试目录
+	// 测试目录
 	dir, err := ioutil.TempDir(os.TempDir(), "etcd_backend_test")
 	if err != nil {
 		panic(err)
@@ -637,11 +636,11 @@ func NewTmpBackend(batchInterval time.Duration, batchLimit int) (*backend, strin
 
 	tmpPath := filepath.Join(dir, "database")
 
-    // 默认配置
+	// 默认配置
 	bcfg := DefaultBackendConfig()
 	bcfg.Path, bcfg.BatchInterval, bcfg.BatchLimit = tmpPath, batchInterval, batchLimit
 
-    // 创建后台
+	// 创建后台
 	return newBackend(bcfg), tmpPath
 }
 
@@ -652,20 +651,20 @@ func NewDefaultTmpBackend() (*backend, string) {
 type snapshot struct {
 	*bolt.Tx
 
-    // 停止信号量
+	// 停止信号量
 	stopc chan struct{}
 
-    // 结束信号量
+	// 结束信号量
 	donec chan struct{}
 }
 
 func (s *snapshot) Close() error {
-    // 告诉后台可以停止了
+	// 告诉后台可以停止了
 	close(s.stopc)
 
-    // 等待结束
+	// 等待结束
 	<-s.donec
 
-    // 回滚
+	// 回滚
 	return s.Tx.Rollback()
 }

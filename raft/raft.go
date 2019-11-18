@@ -35,10 +35,10 @@ const noLimit = math.MaxUint64
 // Possible values for StateType.
 // 状态
 const (
-	StateFollower StateType = iota // 跟随者
-	StateCandidate // 候选人
-	StateLeader // 领导者
-	StatePreCandidate // 预候选人
+	StateFollower     StateType = iota // 跟随者
+	StateCandidate                     // 候选人
+	StateLeader                        // 领导者
+	StatePreCandidate                  // 预候选人
 	numStates
 )
 
@@ -83,6 +83,7 @@ type lockedRand struct {
 	mu   sync.Mutex
 	rand *rand.Rand
 }
+
 func (r *lockedRand) Intn(n int) int {
 	r.mu.Lock()
 	v := r.rand.Intn(n)
@@ -108,6 +109,7 @@ var stmap = [...]string{
 	"StateLeader",
 	"StatePreCandidate",
 }
+
 func (st StateType) String() string {
 	return stmap[uint64(st)]
 }

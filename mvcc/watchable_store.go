@@ -38,7 +38,7 @@ var (
 
 // 可监听接口
 type watchable interface {
-    // 创建
+	// 创建
 	watch(key, end []byte, startRev int64, id WatchID, ch chan<- WatchResponse, fcs ...FilterFunc) (*watcher, cancelFunc)
 	// 进度？
 	progress(w *watcher)
@@ -118,7 +118,7 @@ func (s *watchableStore) NewWatchStream() WatchStream {
 }
 
 func (s *watchableStore) watch(key, end []byte, startRev int64, id WatchID, ch chan<- WatchResponse, fcs ...FilterFunc) (*watcher, cancelFunc) {
-    // 创建监听者
+	// 创建监听者
 	wa := &watcher{
 		key:    key,
 		end:    end,
@@ -131,7 +131,7 @@ func (s *watchableStore) watch(key, end []byte, startRev int64, id WatchID, ch c
 	s.mu.Lock()
 	s.revMu.RLock()
 
-    // 看是否在同步组里面
+	// 看是否在同步组里面
 	synced := startRev > s.store.currentRev || startRev == 0
 	if synced {
 		wa.minRev = s.store.currentRev + 1
@@ -140,7 +140,7 @@ func (s *watchableStore) watch(key, end []byte, startRev int64, id WatchID, ch c
 		}
 	}
 
-    // 加入对应的监听组
+	// 加入对应的监听组
 	if synced {
 		s.synced.add(wa)
 	} else {
@@ -153,25 +153,25 @@ func (s *watchableStore) watch(key, end []byte, startRev int64, id WatchID, ch c
 
 	watcherGauge.Inc()
 
-    // 创建结束
+	// 创建结束
 	return wa, func() { s.cancelWatcher(wa) }
 }
 
 // cancelWatcher removes references of the watcher from the watchableStore
 func (s *watchableStore) cancelWatcher(wa *watcher) {
 	for {
-	    // 加锁
+		// 加锁
 		s.mu.Lock()
 
 		if s.unsynced.delete(wa) {
-		    // 在未同步组里面
+			// 在未同步组里面
 			slowWatcherGauge.Dec()
 			break
 		} else if s.synced.delete(wa) {
-		    // 在同步组里面
+			// 在同步组里面
 			break
 		} else if wa.compacted {
-		    // 已经压缩过了
+			// 已经压缩过了
 			break
 		} else if wa.ch == nil {
 			// already canceled (e.g., cancel/close race)
@@ -179,12 +179,12 @@ func (s *watchableStore) cancelWatcher(wa *watcher) {
 			break
 		}
 
-        // 异常检测
+		// 异常检测
 		if !wa.victim {
 			panic("watcher not victim but not in watch groups")
 		}
 
-        // 找同步中
+		// 找同步中
 		var victimBatch watcherBatch
 		for _, wb := range s.victims {
 			if wb[wa] != nil {
@@ -193,7 +193,7 @@ func (s *watchableStore) cancelWatcher(wa *watcher) {
 			}
 		}
 		if victimBatch != nil {
-		    // 清空同步中
+			// 清空同步中
 			slowWatcherGauge.Dec()
 			delete(victimBatch, wa)
 			break
@@ -202,7 +202,7 @@ func (s *watchableStore) cancelWatcher(wa *watcher) {
 		// victim being processed so not accessible; retry
 		s.mu.Unlock()
 
-        // 休眠继续
+		// 休眠继续
 		time.Sleep(time.Millisecond)
 	}
 
@@ -220,7 +220,7 @@ func (s *watchableStore) Restore(b backend.Backend) error {
 		return err
 	}
 
-    // 已同步切换至未同步
+	// 已同步切换至未同步
 	for wa := range s.synced.watchers {
 		wa.restore = true
 		s.unsynced.add(wa)
@@ -236,13 +236,13 @@ func (s *watchableStore) syncWatchersLoop() {
 	defer s.wg.Done()
 
 	for {
-	    // 读数据
+		// 读数据
 		s.mu.RLock()
 		st := time.Now()
 		lastUnsyncedWatchers := s.unsynced.size()
 		s.mu.RUnlock()
 
-        // 未同步转同步
+		// 未同步转同步
 		unsyncedWatchers := 0
 		if lastUnsyncedWatchers > 0 {
 			unsyncedWatchers = s.syncWatchers()
@@ -256,7 +256,7 @@ func (s *watchableStore) syncWatchersLoop() {
 			waitDuration = syncDuration
 		}
 
-        // 休息一会或结束了
+		// 休息一会或结束了
 		select {
 		case <-time.After(waitDuration):
 		case <-s.stopc:
@@ -275,7 +275,7 @@ func (s *watchableStore) syncVictimsLoop() {
 			// try to update all victim watchers
 		}
 
-        // 读取信息
+		// 读取信息
 		s.mu.RLock()
 		isEmpty := len(s.victims) == 0
 		s.mu.RUnlock()
@@ -335,10 +335,10 @@ func (s *watchableStore) moveVictims() (moved int) {
 				w.minRev = eb.moreRev
 			}
 			if w.minRev <= curRev {
-			    // 未同步
+				// 未同步
 				s.unsynced.add(w)
 			} else {
-			    // 已同步
+				// 已同步
 				slowWatcherGauge.Dec()
 				s.synced.add(w)
 			}
@@ -347,7 +347,7 @@ func (s *watchableStore) moveVictims() (moved int) {
 		s.mu.Unlock()
 	}
 
-    // 新的同步中
+	// 新的同步中
 	if len(newVictim) > 0 {
 		s.mu.Lock()
 		s.victims = append(s.victims, newVictim)
@@ -367,7 +367,7 @@ func (s *watchableStore) syncWatchers() int {
 	defer s.mu.Unlock()
 
 	if s.unsynced.size() == 0 {
-	    // 没有未同步的
+		// 没有未同步的
 		return 0
 	}
 
@@ -418,7 +418,7 @@ func (s *watchableStore) syncWatchers() int {
 			w.minRev = eb.moreRev
 		}
 
-        // 发送
+		// 发送
 		if w.send(WatchResponse{WatchID: w.id, Events: eb.evs, Revision: curRev}) {
 			pendingEventsGauge.Add(float64(len(eb.evs)))
 		} else {
@@ -429,7 +429,7 @@ func (s *watchableStore) syncWatchers() int {
 		}
 
 		if w.victim {
-		    // 发送中
+			// 发送中
 			victims[w] = eb
 		} else {
 			if eb.moreRev != 0 {
@@ -440,12 +440,13 @@ func (s *watchableStore) syncWatchers() int {
 			// 已同步
 			s.synced.add(w)
 		}
+
 		// 已经不是未同步了
 		s.unsynced.delete(w)
 	}
 	s.addVictim(victims)
 
-    // 同步监控点
+	// 同步监控点
 	vsz := 0
 	for _, v := range s.victims {
 		vsz += len(v)
@@ -490,7 +491,7 @@ func kvsToEvents(lg *zap.Logger, wg *watcherGroup, revs, vals [][]byte) (evs []m
 func (s *watchableStore) notify(rev int64, evs []mvccpb.Event) {
 	var victim watcherBatch
 	for w, eb := range newWatcherBatch(&s.synced, evs) {
-	    // 异常检测
+		// 异常检测
 		if eb.revs != 1 {
 			if s.store != nil && s.store.lg != nil {
 				s.store.lg.Panic(
@@ -502,9 +503,9 @@ func (s *watchableStore) notify(rev int64, evs []mvccpb.Event) {
 			}
 		}
 
-        // 发送
+		// 发送
 		if w.send(WatchResponse{WatchID: w.id, Events: eb.evs, Revision: rev}) {
-		    // 发送成功
+			// 发送成功
 			pendingEventsGauge.Add(float64(len(eb.evs)))
 		} else {
 			// move slow watcher to victims
@@ -528,10 +529,10 @@ func (s *watchableStore) addVictim(victim watcherBatch) {
 		return
 	}
 
-    // 加数据
+	// 加数据
 	s.victims = append(s.victims, victim)
 
-    // 发送信号
+	// 发送信号
 	select {
 	case s.victimc <- struct{}{}:
 	default:
@@ -553,7 +554,7 @@ func (s *watchableStore) progress(w *watcher) {
 }
 
 type watcher struct {
-    // 监听范围
+	// 监听范围
 	// the watcher key
 	key []byte
 	// end indicates the end of the range to watch.
@@ -582,7 +583,7 @@ type watcher struct {
 	minRev int64
 	id     WatchID
 
-    // 过滤函数
+	// 过滤函数
 	fcs []FilterFunc
 
 	// a chan to send out the watch response.
@@ -591,14 +592,14 @@ type watcher struct {
 }
 
 func (w *watcher) send(wr WatchResponse) bool {
-    // 是否进度消息
+	// 是否进度消息
 	progressEvent := len(wr.Events) == 0
 
-    // 过滤一下
+	// 过滤一下
 	if len(w.fcs) != 0 {
 		ne := make([]mvccpb.Event, 0, len(wr.Events))
 		for i := range wr.Events {
-		    // 是否过滤
+			// 是否过滤
 			filtered := false
 			for _, filter := range w.fcs {
 				if filter(wr.Events[i]) {
@@ -615,11 +616,11 @@ func (w *watcher) send(wr WatchResponse) bool {
 
 	// if all events are filtered out, we should send nothing.
 	if !progressEvent && len(wr.Events) == 0 {
-	    // 全部被过滤了
+		// 全部被过滤了
 		return true
 	}
 
-    // 发送
+	// 发送
 	select {
 	case w.ch <- wr:
 		return true

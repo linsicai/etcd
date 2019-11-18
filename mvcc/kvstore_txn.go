@@ -177,10 +177,12 @@ func (tw *storeTxnWrite) put(key, value []byte, leaseID lease.LeaseID) {
 		oldLease = tw.s.le.GetLease(lease.LeaseItem{Key: string(key)})
 	}
 
+	// 创建内部版本
 	ibytes := newRevBytes()
 	idxRev := revision{main: rev, sub: int64(len(tw.changes))}
 	revToBytes(idxRev, ibytes)
 
+	// 创建DB KV
 	ver = ver + 1
 	kv := mvccpb.KeyValue{
 		Key:            key,
@@ -190,7 +192,6 @@ func (tw *storeTxnWrite) put(key, value []byte, leaseID lease.LeaseID) {
 		Version:        ver,
 		Lease:          int64(leaseID),
 	}
-
 	d, err := kv.Marshal()
 	if err != nil {
 		if tw.storeTxnRead.s.lg != nil {

@@ -29,30 +29,30 @@ var safeRangeBucket = []byte("key")
 
 // 接口
 type ReadTx interface {
-    // 锁
+	// 锁
 	Lock()
 	Unlock()
 
-    // 批量读取kvs
+	// 批量读取kvs
 	UnsafeRange(bucketName []byte, key, endKey []byte, limit int64) (keys [][]byte, vals [][]byte)
 
-    // 遍历kvs
+	// 遍历kvs
 	UnsafeForEach(bucketName []byte, visitor func(k, v []byte) error) error
 }
 
 type readTx struct {
 	// mu protects accesses to the txReadBuffer
 	// buffer锁
-	mu  sync.RWMutex
+	mu sync.RWMutex
 
-    // buffer
+	// buffer
 	buf txReadBuffer
 
 	// txmu protects accesses to buckets and tx on Range requests.
-	txmu    sync.RWMutex
-	tx      *bolt.Tx
+	txmu sync.RWMutex
+	tx   *bolt.Tx
 
-    // 桶
+	// 桶
 	buckets map[string]*bolt.Bucket
 }
 
@@ -66,22 +66,22 @@ func (rt *readTx) UnsafeRange(bucketName, key, endKey []byte, limit int64) ([][]
 		limit = 1
 	}
 	if limit <= 0 {
-	    // 全量
+		// 全量
 		limit = math.MaxInt64
 	}
 
 	if limit > 1 && !bytes.Equal(bucketName, safeRangeBucket) {
-	    // 告警
+		// 告警
 		panic("do not use unsafeRange on non-keys bucket")
 	}
 
-    // 从buffer 里面找
+	// 从buffer 里面找
 	keys, vals := rt.buf.Range(bucketName, key, endKey, limit)
 	if int64(len(keys)) == limit {
 		return keys, vals
 	}
 
-    // 找bucket，找不到则新建一个
+	// 找bucket，找不到则新建一个
 	// find/cache bucket
 	bn := string(bucketName)
 	rt.txmu.RLock()
@@ -100,12 +100,12 @@ func (rt *readTx) UnsafeRange(bucketName, key, endKey []byte, limit int64) ([][]
 		return keys, vals
 	}
 
-    // 找到当前cursor
+	// 找到当前cursor
 	rt.txmu.Lock()
 	c := bucket.Cursor()
 	rt.txmu.Unlock()
 
-    // 找bucket
+	// 找bucket
 	k2, v2 := unsafeRange(c, key, endKey, limit-int64(len(keys)))
 
 	return append(k2, keys...), append(v2, vals...)
@@ -125,22 +125,22 @@ func (rt *readTx) UnsafeForEach(bucketName []byte, visitor func(k, v []byte) err
 		return visitor(k, v)
 	}
 
-    // 从buffer 提取keys
+	// 从buffer 提取keys
 	if err := rt.buf.ForEach(bucketName, getDups); err != nil {
 		return err
 	}
 
-    // 从tx 提取剩余的keys
+	// 从tx 提取剩余的keys
 	rt.txmu.Lock()
 	err := unsafeForEach(rt.tx, bucketName, visitNoDup)
 	rt.txmu.Unlock()
 
-    // 出错
+	// 出错
 	if err != nil {
 		return err
 	}
 
-    // 遍历buffer
+	// 遍历buffer
 	return rt.buf.ForEach(bucketName, visitor)
 }
 

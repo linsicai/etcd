@@ -52,27 +52,26 @@ message Snapshot {
 
 // 信息类型
 enum MessageType {
-	MsgHup             = 0;
-	MsgBeat            = 1;
-	MsgProp            = 2;
-	MsgApp             = 3;
-	MsgAppResp         = 4;
-	MsgVote            = 5;
-	MsgVoteResp        = 6;
-	MsgSnap            = 7; // 快照
-	MsgHeartbeat       = 8; // 心跳
-	MsgHeartbeatResp   = 9; // 心跳回包
-	MsgUnreachable     = 10; // 不可到达
-	MsgSnapStatus      = 11; // 快照状态
-	MsgCheckQuorum     = 12; // 校验配额
-	MsgTransferLeader  = 13; // 转交leader
-	MsgTimeoutNow      = 14; // 超时
-	MsgReadIndex       = 15;
+	MsgHup             = 0;     // 用于选举
+	MsgBeat            = 1;     // 领导者发心跳给追随者。
+	MsgProp            = 2;     // 提议消息表示追加消息到日志实体。
+	MsgApp             = 3;     // 复制日志
+	MsgAppResp         = 4;     // 复制日志响应
+	MsgVote            = 5;     // 选举投票
+	MsgVoteResp        = 6;     // 选举投票响应
+	MsgSnap            = 7;     // 安装快照
+	MsgHeartbeat       = 8;     // 
+	MsgHeartbeatResp   = 9;     // 
+	MsgUnreachable     = 10;    // 不可到达，需要重新探测
+	MsgSnapStatus      = 11;    // 安装快照结果
+	MsgCheckQuorum     = 12;    // 校验配额
+	MsgTransferLeader  = 13;    // 转交leader
+	MsgTimeoutNow      = 14;    // 超时
+	MsgReadIndex       = 15;    // 
 	MsgReadIndexResp   = 16;
-	MsgPreVote         = 17;
-	MsgPreVoteResp     = 18;
+	MsgPreVote         = 17;    // 预投票，两阶段选举协议。
+	MsgPreVoteResp     = 18;    // 预投票响应
 }
-
 // 信息
 message Message {
 	optional MessageType type        = 1  [(gogoproto.nullable) = false];

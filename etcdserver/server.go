@@ -119,7 +119,7 @@ var (
 func init() {
 	rand.Seed(time.Now().UnixNano())
 
-    // 
+    // 注册变量
 	expvar.Publish(
 		"file_descriptor_limit",
 		expvar.Func(
@@ -131,6 +131,7 @@ func init() {
 	)
 }
 
+// 响应
 type Response struct {
 	Term    uint64
 	Index   uint64
@@ -139,6 +140,7 @@ type Response struct {
 	Err     error
 }
 
+// 服务接口
 type ServerV2 interface {
 	Server
 	Leader() types.ID
@@ -162,6 +164,7 @@ type Server interface {
 	// AddMember attempts to add a member into the cluster. It will return
 	// ErrIDRemoved if member ID is removed from the cluster, or return
 	// ErrIDExists if member ID exists in the cluster.
+	// 增加成员
 	AddMember(ctx context.Context, memb membership.Member) ([]*membership.Member, error)
 	// RemoveMember attempts to remove a member from the cluster. It will
 	// return ErrIDRemoved if member ID is removed from the cluster, or return
@@ -361,24 +364,33 @@ func NewServer(cfg ServerConfig) (srv *EtcdServer, err error) {
 
 	switch {
 	case !haveWAL && !cfg.NewCluster:
+	    // 没有wal 袋老集群
+
+		// 校验加入集群参数
 		if err = cfg.VerifyJoinExisting(); err != nil {
 			return nil, err
 		}
+
+        // 获取集群参数
 		cl, err = membership.NewClusterFromURLsMap(cfg.Logger, cfg.InitialClusterToken, cfg.InitialPeerURLsMap)
 		if err != nil {
 			return nil, err
 		}
+		// 获取集群
 		existingCluster, gerr := GetClusterFromRemotePeers(cfg.Logger, getRemotePeerURLs(cl, cfg.Name), prt)
 		if gerr != nil {
 			return nil, fmt.Errorf("cannot fetch cluster info from peer urls: %v", gerr)
 		}
+		// 验证集群
 		if err = membership.ValidateClusterAndAssignIDs(cfg.Logger, cl, existingCluster); err != nil {
 			return nil, fmt.Errorf("error validating peerURLs %s: %v", existingCluster, err)
 		}
+		// 较正集群
 		if !isCompatibleWithCluster(cfg.Logger, cl, cl.MemberByName(cfg.Name).ID, prt) {
 			return nil, fmt.Errorf("incompatible with current running cluster")
 		}
 
+		// 启动集群节点
 		remotes = existingCluster.Members()
 		cl.SetID(types.ID(0), existingCluster.ID())
 		cl.SetStore(st)
@@ -387,19 +399,25 @@ func NewServer(cfg ServerConfig) (srv *EtcdServer, err error) {
 		cl.SetID(id, existingCluster.ID())
 
 	case !haveWAL && cfg.NewCluster:
+		// 没有wal 的新集群
+
+		// 校验启动参数
 		if err = cfg.VerifyBootstrap(); err != nil {
 			return nil, err
 		}
+		// 获取集群参数
 		cl, err = membership.NewClusterFromURLsMap(cfg.Logger, cfg.InitialClusterToken, cfg.InitialPeerURLsMap)
 		if err != nil {
 			return nil, err
 		}
+		// 校验启动参数
 		m := cl.MemberByName(cfg.Name)
 		if isMemberBootstrapped(cfg.Logger, cl, cfg.Name, prt, cfg.bootstrapTimeout()) {
 			return nil, fmt.Errorf("member %s has already been bootstrapped", m.ID)
 		}
 		if cfg.ShouldDiscover() {
 			var str string
+			// 发现加入
 			str, err = v2discovery.JoinCluster(cfg.Logger, cfg.DiscoveryURL, cfg.DiscoveryProxy, m.ID, cfg.InitialPeerURLsMap.String())
 			if err != nil {
 				return nil, &DiscoveryError{Op: "join", Err: err}
@@ -409,28 +427,36 @@ func NewServer(cfg ServerConfig) (srv *EtcdServer, err error) {
 			if err != nil {
 				return nil, err
 			}
+			// 校验参数
 			if checkDuplicateURL(urlsmap) {
 				return nil, fmt.Errorf("discovery cluster %s has duplicate url", urlsmap)
 			}
+			// 重新获取集群参数
 			if cl, err = membership.NewClusterFromURLsMap(cfg.Logger, cfg.InitialClusterToken, urlsmap); err != nil {
 				return nil, err
 			}
 		}
+		// 新集群
 		cl.SetStore(st)
 		cl.SetBackend(be)
 		id, n, s, w = startNode(cfg, cl, cl.MemberIDs())
 		cl.SetID(id, cl.ID())
 
 	case haveWAL:
+	    // 如果有wal
+
+		// 校验成员目录
 		if err = fileutil.IsDirWriteable(cfg.MemberDir()); err != nil {
 			return nil, fmt.Errorf("cannot write to member directory: %v", err)
 		}
 
+		// 校验wal 目录
 		if err = fileutil.IsDirWriteable(cfg.WALDir()); err != nil {
 			return nil, fmt.Errorf("cannot write to WAL directory: %v", err)
 		}
 
 		if cfg.ShouldDiscover() {
+		    // 发现集群失效日志
 			if cfg.Logger != nil {
 				cfg.Logger.Warn(
 					"discovery token is ignored since cluster already initialized; valid logs are found",
@@ -440,11 +466,14 @@ func NewServer(cfg ServerConfig) (srv *EtcdServer, err error) {
 				plog.Warningf("discovery token ignored since a cluster has already been initialized. Valid log found at %q", cfg.WALDir())
 			}
 		}
+		// 加载快照
 		snapshot, err = ss.Load()
 		if err != nil && err != snap.ErrNoSnapshot {
 			return nil, err
 		}
 		if snapshot != nil {
+		    // 如果有快照
+		    // 回复数据
 			if err = st.Recovery(snapshot.Data); err != nil {
 				if cfg.Logger != nil {
 					cfg.Logger.Panic("failed to recover from snapshot")
@@ -453,6 +482,7 @@ func NewServer(cfg ServerConfig) (srv *EtcdServer, err error) {
 				}
 			}
 
+			// 打印基本信息
 			if cfg.Logger != nil {
 				cfg.Logger.Info(
 					"recovered v2 store from snapshot",
@@ -463,6 +493,7 @@ func NewServer(cfg ServerConfig) (srv *EtcdServer, err error) {
 				plog.Infof("recovered store from snapshot at index %d", snapshot.Metadata.Index)
 			}
 
+			// 回复快照后端
 			if be, err = recoverSnapshotBackend(cfg, be, *snapshot); err != nil {
 				if cfg.Logger != nil {
 					cfg.Logger.Panic("failed to recover v3 backend from snapshot", zap.Error(err))
@@ -470,6 +501,7 @@ func NewServer(cfg ServerConfig) (srv *EtcdServer, err error) {
 					plog.Panicf("recovering backend from snapshot error: %v", err)
 				}
 			}
+			// 打印日志
 			if cfg.Logger != nil {
 				s1, s2 := be.Size(), be.SizeInUse()
 				cfg.Logger.Info(
@@ -483,8 +515,10 @@ func NewServer(cfg ServerConfig) (srv *EtcdServer, err error) {
 		}
 
 		if !cfg.ForceNewCluster {
+		    // 启动节点
 			id, cl, n, s, w = restartNode(cfg, snapshot)
 		} else {
+			// 新集群
 			id, cl, n, s, w = restartAsStandaloneNode(cfg, snapshot)
 		}
 
@@ -500,13 +534,17 @@ func NewServer(cfg ServerConfig) (srv *EtcdServer, err error) {
 		return nil, fmt.Errorf("unsupported bootstrap config")
 	}
 
+	// 测试成员目录
 	if terr := fileutil.TouchDirAll(cfg.MemberDir()); terr != nil {
 		return nil, fmt.Errorf("cannot access member directory: %v", terr)
 	}
 
+	// 服务统计
 	sstats := stats.NewServerStats(cfg.Name, id.String())
+	// 领导者统计
 	lstats := stats.NewLeaderStats(id.String())
 
+	// 创建服务
 	heartbeat := time.Duration(cfg.TickMs) * time.Millisecond
 	srv = &EtcdServer{
 		readych:     make(chan struct{}),
@@ -2067,6 +2105,7 @@ func (s *EtcdServer) applyEntryNormal(e *raftpb.Entry) {
 // applyConfChange applies a ConfChange to the server. It is only
 // invoked with a ConfChange that has already passed through Raft
 func (s *EtcdServer) applyConfChange(cc raftpb.ConfChange, confState *raftpb.ConfState) (bool, error) {
+	// 验证参数
 	if err := s.cluster.ValidateConfigurationChange(cc); err != nil {
 		cc.NodeID = raft.None
 		s.r.ApplyConfChange(cc)
@@ -2074,9 +2113,11 @@ func (s *EtcdServer) applyConfChange(cc raftpb.ConfChange, confState *raftpb.Con
 	}
 
 	lg := s.getLogger()
+	// 做变更
 	*confState = *s.r.ApplyConfChange(cc)
 	switch cc.Type {
 	case raftpb.ConfChangeAddNode:
+	    // 添加节点
 		m := new(membership.Member)
 		if err := json.Unmarshal(cc.Context, m); err != nil {
 			if lg != nil {
@@ -2085,6 +2126,7 @@ func (s *EtcdServer) applyConfChange(cc raftpb.ConfChange, confState *raftpb.Con
 				plog.Panicf("unmarshal member should never fail: %v", err)
 			}
 		}
+		// 验证参数
 		if cc.NodeID != uint64(m.ID) {
 			if lg != nil {
 				lg.Panic(
@@ -2096,20 +2138,26 @@ func (s *EtcdServer) applyConfChange(cc raftpb.ConfChange, confState *raftpb.Con
 				plog.Panicf("nodeID should always be equal to member ID")
 			}
 		}
+		// 添加成员
 		s.cluster.AddMember(m)
 		if m.ID != s.id {
+		    // 广播出去
 			s.r.transport.AddPeer(m.ID, m.PeerURLs)
 		}
 
 	case raftpb.ConfChangeRemoveNode:
+	    // 移除节点
 		id := types.ID(cc.NodeID)
 		s.cluster.RemoveMember(id)
 		if id == s.id {
+		    // 移除自己
 			return true, nil
 		}
+		// 广播出去
 		s.r.transport.RemovePeer(id)
 
 	case raftpb.ConfChangeUpdateNode:
+	    // 更新节点
 		m := new(membership.Member)
 		if err := json.Unmarshal(cc.Context, m); err != nil {
 			if lg != nil {
@@ -2118,6 +2166,7 @@ func (s *EtcdServer) applyConfChange(cc raftpb.ConfChange, confState *raftpb.Con
 				plog.Panicf("unmarshal member should never fail: %v", err)
 			}
 		}
+		// 校验参数
 		if cc.NodeID != uint64(m.ID) {
 			if lg != nil {
 				lg.Panic(
@@ -2129,8 +2178,10 @@ func (s *EtcdServer) applyConfChange(cc raftpb.ConfChange, confState *raftpb.Con
 				plog.Panicf("nodeID should always be equal to member ID")
 			}
 		}
+		// 更新节点属性
 		s.cluster.UpdateRaftAttributes(m.ID, m.RaftAttributes)
 		if m.ID != s.id {
+		    // 广播出去
 			s.r.transport.UpdatePeer(m.ID, m.PeerURLs)
 		}
 	}
@@ -2138,8 +2189,11 @@ func (s *EtcdServer) applyConfChange(cc raftpb.ConfChange, confState *raftpb.Con
 }
 
 // TODO: non-blocking snapshot
+// 非阻塞快照
 func (s *EtcdServer) snapshot(snapi uint64, confState raftpb.ConfState) {
+    // 克隆存储
 	clone := s.v2store.Clone()
+
 	// commit kv to write metadata (for example: consistent index) to disk.
 	// KV().commit() updates the consistent index in backend.
 	// All operations that update consistent index must be called sequentially
@@ -2151,6 +2205,7 @@ func (s *EtcdServer) snapshot(snapi uint64, confState raftpb.ConfState) {
 	s.goAttach(func() {
 		lg := s.getLogger()
 
+		// 保存
 		d, err := clone.SaveNoCopy()
 		// TODO: current store will never fail to do a snapshot
 		// what should we do if the store might fail?
@@ -2161,6 +2216,8 @@ func (s *EtcdServer) snapshot(snapi uint64, confState raftpb.ConfState) {
 				plog.Panicf("store save should never fail: %v", err)
 			}
 		}
+
+        // 创建快照
 		snap, err := s.r.raftStorage.CreateSnapshot(snapi, &confState, d)
 		if err != nil {
 			// the snapshot was done asynchronously with the progress of raft.
@@ -2176,6 +2233,7 @@ func (s *EtcdServer) snapshot(snapi uint64, confState raftpb.ConfState) {
 		}
 		// SaveSnap saves the snapshot and releases the locked wal files
 		// to the snapshot index.
+		// 保存快照
 		if err = s.r.storage.SaveSnap(snap); err != nil {
 			if lg != nil {
 				lg.Panic("failed to save snapshot", zap.Error(err))
@@ -2197,6 +2255,7 @@ func (s *EtcdServer) snapshot(snapi uint64, confState raftpb.ConfState) {
 		// the snapshot sent to catch up. If we do not pause compaction, the log entries right after
 		// the snapshot sent might already be compacted. It happens when the snapshot takes long time
 		// to send and save. Pausing compaction avoids triggering a snapshot sending cycle.
+		// 如果已经在传递快照了，就退出
 		if atomic.LoadInt64(&s.inflightSnapshots) != 0 {
 			if lg != nil {
 				lg.Info("skip compaction since there is an inflight snapshot")
@@ -2207,13 +2266,16 @@ func (s *EtcdServer) snapshot(snapi uint64, confState raftpb.ConfState) {
 		}
 
 		// keep some in memory log entries for slow followers.
+		// 保存一些实体
 		compacti := uint64(1)
 		if snapi > s.Cfg.SnapshotCatchUpEntries {
 			compacti = snapi - s.Cfg.SnapshotCatchUpEntries
 		}
 
+		// 存储压缩
 		err = s.r.raftStorage.Compact(compacti)
 		if err != nil {
+		    // 压缩出错
 			// the compaction was done asynchronously with the progress of raft.
 			// raft log might already been compact.
 			if err == raft.ErrCompacted {
@@ -2225,6 +2287,7 @@ func (s *EtcdServer) snapshot(snapi uint64, confState raftpb.ConfState) {
 				plog.Panicf("unexpected compaction error %v", err)
 			}
 		}
+		// 打印日志
 		if lg != nil {
 			lg.Info(
 				"compacted Raft logs",
@@ -2237,6 +2300,7 @@ func (s *EtcdServer) snapshot(snapi uint64, confState raftpb.ConfState) {
 }
 
 // CutPeer drops messages to the specified peer.
+// 消息截断
 func (s *EtcdServer) CutPeer(id types.ID) {
 	tr, ok := s.r.transport.(*rafthttp.Transport)
 	if ok {
@@ -2245,6 +2309,7 @@ func (s *EtcdServer) CutPeer(id types.ID) {
 }
 
 // MendPeer recovers the message dropping behavior of the given peer.
+// 消息恢复
 func (s *EtcdServer) MendPeer(id types.ID) {
 	tr, ok := s.r.transport.(*rafthttp.Transport)
 	if ok {
@@ -2267,19 +2332,24 @@ func (s *EtcdServer) ClusterVersion() *semver.Version {
 // It updates the cluster version if all members agrees on a higher one.
 // It prints out log if there is a member with a higher version than the
 // local version.
+// 监控版本协程
 func (s *EtcdServer) monitorVersions() {
+    // 
 	for {
 		select {
 		case <-s.forceVersionC:
 		case <-time.After(monitorVersionInterval):
 		case <-s.stopping:
+			// 等信号，强制或定时或停机了
 			return
 		}
 
 		if s.Leader() != s.ID() {
+		    // 不是领导者，不干事
 			continue
 		}
 
+		// 获取版本
 		v := decideClusterVersion(s.getLogger(), getVersions(s.getLogger(), s.cluster, s.id, s.peerRt))
 		if v != nil {
 			// only keep major.minor version for comparison
@@ -2293,10 +2363,12 @@ func (s *EtcdServer) monitorVersions() {
 		// 1. use the decided version if possible
 		// 2. or use the min cluster version
 		if s.cluster.Version() == nil {
+		    // 集群还没有版本，使用裁决出来的版本
 			verStr := version.MinClusterVersion
 			if v != nil {
 				verStr = v.String()
 			}
+			// 去更新集群版本
 			s.goAttach(func() { s.updateClusterVersion(verStr) })
 			continue
 		}
@@ -2304,15 +2376,18 @@ func (s *EtcdServer) monitorVersions() {
 		// update cluster version only if the decided version is greater than
 		// the current cluster version
 		if v != nil && s.cluster.Version().LessThan(*v) {
+			// 这是一个新的版本，更新之
 			s.goAttach(func() { s.updateClusterVersion(v.String()) })
 		}
 	}
 }
 
+// 更新集群版本
 func (s *EtcdServer) updateClusterVersion(ver string) {
 	lg := s.getLogger()
 
 	if s.cluster.Version() == nil {
+		// 没有版本，打印错误
 		if lg != nil {
 			lg.Info(
 				"setting up initial cluster version",
@@ -2322,6 +2397,7 @@ func (s *EtcdServer) updateClusterVersion(ver string) {
 			plog.Infof("setting up the initial cluster version to %s", version.Cluster(ver))
 		}
 	} else {
+	    // 打印日志
 		if lg != nil {
 			lg.Info(
 				"updating cluster version",
@@ -2333,24 +2409,29 @@ func (s *EtcdServer) updateClusterVersion(ver string) {
 		}
 	}
 
+	// 构造请求
 	req := pb.Request{
 		Method: "PUT",
 		Path:   membership.StoreClusterVersionKey(),
 		Val:    ver,
 	}
 
+    // 创建上下文，执行一下
 	ctx, cancel := context.WithTimeout(s.ctx, s.Cfg.ReqTimeout())
 	_, err := s.Do(ctx, req)
 	cancel()
 
+	// 看结果
 	switch err {
 	case nil:
+	    // 成功了
 		if lg != nil {
 			lg.Info("cluster version is updated", zap.String("cluster-version", version.Cluster(ver)))
 		}
 		return
 
 	case ErrStopped:
+	    // 服务停止了
 		if lg != nil {
 			lg.Warn("aborting cluster version update; server is stopped", zap.Error(err))
 		} else {
@@ -2359,6 +2440,7 @@ func (s *EtcdServer) updateClusterVersion(ver string) {
 		return
 
 	default:
+	    // 默认错误
 		if lg != nil {
 			lg.Warn("failed to update cluster version", zap.Error(err))
 		} else {

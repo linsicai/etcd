@@ -58,6 +58,7 @@ func HandleBasic(mux *http.ServeMux, server etcdserver.ServerPeer) {
 	// 设置日志等级
 	mux.HandleFunc(configPath+"/local/log", logHandleFunc)
 
+    // 注册指标与健康度
 	HandleMetricsHealth(mux, server)
 
 	// 获取版本号
@@ -70,6 +71,7 @@ func versionHandler(c api.Cluster, fn func(http.ResponseWriter, *http.Request, s
 		// 获取集群版本
 		v := c.Version()
 
+        // 写结果
 		if v != nil {
 			fn(w, r, v.String())
 		} else {

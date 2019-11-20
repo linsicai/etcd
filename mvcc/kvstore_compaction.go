@@ -23,34 +23,34 @@ import (
 
 // 周期性压缩
 func (s *store) scheduleCompaction(compactMainRev int64, keep map[revision]struct{}) bool {
-    // 结束时统计打点
+	// 结束时统计打点
 	totalStart := time.Now()
 	defer dbCompactionTotalMs.Observe(float64(time.Since(totalStart) / time.Millisecond))
 	keyCompactions := 0
 	defer func() { dbCompactionKeysCounter.Add(float64(keyCompactions)) }()
 
-    // 计算结束版本
+	// 计算结束版本
 	end := make([]byte, 8)
 	binary.BigEndian.PutUint64(end, uint64(compactMainRev+1))
 
 	batchsize := int64(10000)
 	last := make([]byte, 8+1+8) // 记录已经处理过最大版本
 
-    // 死循环
+	// 死循环
 	for {
 		var rev revision
 
-        // 开始
+		// 开始
 		start := time.Now()
 
-        // 事务加锁
+		// 事务加锁
 		tx := s.b.BatchTx()
 		tx.Lock()
 
-        // 批量获取老版本key
+		// 批量获取老版本key
 		keys, _ := tx.UnsafeRange(keyBucketName, last, end, batchsize)
 
-        // 如果不在保留版本中，删除这些key
+		// 如果不在保留版本中，删除这些key
 		for _, key := range keys {
 			rev = bytesToRev(key)
 			if _, ok := keep[rev]; !ok {
@@ -60,7 +60,7 @@ func (s *store) scheduleCompaction(compactMainRev int64, keep map[revision]struc
 		}
 
 		if len(keys) < int(batchsize) {
-		    // 如果没那么多需要处理
+			// 如果没那么多需要处理
 
 			// 更新当前主版本
 			rbytes := make([]byte, 8+1+8)
@@ -68,7 +68,7 @@ func (s *store) scheduleCompaction(compactMainRev int64, keep map[revision]struc
 			tx.UnsafePut(metaBucketName, finishedCompactKeyName, rbytes)
 			tx.Unlock()
 
-            // 打个日志
+			// 打个日志
 			if s.lg != nil {
 				s.lg.Info(
 					"finished scheduled compaction",
@@ -86,11 +86,11 @@ func (s *store) scheduleCompaction(compactMainRev int64, keep map[revision]struc
 		// 更新版本
 		revToBytes(revision{main: rev.main, sub: rev.sub + 1}, last)
 
-        // 解锁，统计一会
+		// 解锁，统计一会
 		tx.Unlock()
 		dbCompactionPauseMs.Observe(float64(time.Since(start) / time.Millisecond))
 
-        // 消停一会，同时看看是否结束了
+		// 消停一会，同时看看是否结束了
 		select {
 		case <-time.After(100 * time.Millisecond):
 		case <-s.stopc:

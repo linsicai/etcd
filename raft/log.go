@@ -43,7 +43,7 @@ type raftLog struct {
 	// 已申请
 	applied uint64
 
-    // 日志
+	// 日志
 	logger Logger
 
 	// maxNextEntsSize is the maximum number aggregate byte size of the messages
@@ -62,19 +62,19 @@ func newLog(storage Storage, logger Logger) *raftLog {
 // newLogWithSize returns a log using the given storage and max
 // message size.
 func newLogWithSize(storage Storage, logger Logger, maxNextEntsSize uint64) *raftLog {
-    // 参数校验
+	// 参数校验
 	if storage == nil {
 		log.Panic("storage must not be nil")
 	}
 
-    // 构造函数
+	// 构造函数
 	log := &raftLog{
 		storage:         storage,
 		logger:          logger,
 		maxNextEntsSize: maxNextEntsSize,
 	}
 
-    // 存储校验
+	// 存储校验
 	firstIndex, err := storage.FirstIndex()
 	if err != nil {
 		panic(err) // TODO(bdarnell)
@@ -84,7 +84,7 @@ func newLogWithSize(storage Storage, logger Logger, maxNextEntsSize uint64) *raf
 		panic(err) // TODO(bdarnell)
 	}
 
-    // 初始化
+	// 初始化
 	log.unstable.offset = lastIndex + 1
 	log.unstable.logger = logger
 	// Initialize our committed and applied pointers to the time of the last compaction.

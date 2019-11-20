@@ -94,17 +94,17 @@ type MemoryStorage struct {
 	// 锁
 	sync.Mutex
 
-    // 硬状态
+	// 硬状态
 	hardState pb.HardState
 	// 快照
-	snapshot  pb.Snapshot
+	snapshot pb.Snapshot
 	// ents[i] has raft log position i+snapshot.Metadata.Index
 	// 实体
 	ents []pb.Entry
 }
 
 // NewMemoryStorage creates an empty MemoryStorage.
-// 
+//
 func NewMemoryStorage() *MemoryStorage {
 	return &MemoryStorage{
 		// When starting from scratch populate the list with a dummy entry at term zero.
@@ -128,18 +128,18 @@ func (ms *MemoryStorage) SetHardState(st pb.HardState) error {
 }
 
 // Entries implements the Storage interface.
-// 
+//
 func (ms *MemoryStorage) Entries(lo, hi, maxSize uint64) ([]pb.Entry, error) {
 	ms.Lock()
 	defer ms.Unlock()
 
-    // lo 太小
+	// lo 太小
 	offset := ms.ents[0].Index
 	if lo <= offset {
 		return nil, ErrCompacted
 	}
 
-    // hi 太大
+	// hi 太大
 	if hi > ms.lastIndex()+1 {
 		raftLogger.Panicf("entries' hi(%d) is out of bound lastindex(%d)", hi, ms.lastIndex())
 	}
@@ -150,10 +150,10 @@ func (ms *MemoryStorage) Entries(lo, hi, maxSize uint64) ([]pb.Entry, error) {
 		return nil, ErrUnavailable
 	}
 
-    // 范围限制实体
+	// 范围限制实体
 	ents := ms.ents[lo-offset : hi-offset]
 
-    // 大小限制实体
+	// 大小限制实体
 	return limitSize(ents, maxSize), nil
 }
 
@@ -162,17 +162,17 @@ func (ms *MemoryStorage) Term(i uint64) (uint64, error) {
 	ms.Lock()
 	defer ms.Unlock()
 
-    // 索引太小
+	// 索引太小
 	offset := ms.ents[0].Index
 	if i < offset {
 		return 0, ErrCompacted
 	}
-    // 索引太大
+	// 索引太大
 	if int(i-offset) >= len(ms.ents) {
 		return 0, ErrUnavailable
 	}
 
-    // 指定索引的任期
+	// 指定索引的任期
 	return ms.ents[i-offset].Term, nil
 }
 
@@ -222,7 +222,7 @@ func (ms *MemoryStorage) ApplySnapshot(snap pb.Snapshot) error {
 		return ErrSnapOutOfDate
 	}
 
-    // 设置快照和实体
+	// 设置快照和实体
 	ms.snapshot = snap
 	ms.ents = []pb.Entry{{Term: snap.Metadata.Term, Index: snap.Metadata.Index}}
 	return nil
@@ -236,18 +236,18 @@ func (ms *MemoryStorage) CreateSnapshot(i uint64, cs *pb.ConfState, data []byte)
 	ms.Lock()
 	defer ms.Unlock()
 
-    // 索引太小
+	// 索引太小
 	if i <= ms.snapshot.Metadata.Index {
 		return pb.Snapshot{}, ErrSnapOutOfDate
 	}
 
-    // 索引太大
+	// 索引太大
 	offset := ms.ents[0].Index
 	if i > ms.lastIndex() {
 		raftLogger.Panicf("snapshot %d is out of bound lastindex(%d)", i, ms.lastIndex())
 	}
 
-    // 设置元信息
+	// 设置元信息
 	ms.snapshot.Metadata.Index = i
 	ms.snapshot.Metadata.Term = ms.ents[i-offset].Term
 	if cs != nil {
@@ -266,17 +266,17 @@ func (ms *MemoryStorage) Compact(compactIndex uint64) error {
 	ms.Lock()
 	defer ms.Unlock()
 
-    // 指定索引太小
+	// 指定索引太小
 	offset := ms.ents[0].Index
 	if compactIndex <= offset {
 		return ErrCompacted
 	}
-    // 指定索引太大
+	// 指定索引太大
 	if compactIndex > ms.lastIndex() {
 		raftLogger.Panicf("compact %d is out of bound lastindex(%d)", compactIndex, ms.lastIndex())
 	}
 
-    // 压缩
+	// 压缩
 	i := compactIndex - offset
 	ents := make([]pb.Entry, 1, 1+uint64(len(ms.ents))-i)
 	ents[0].Index = ms.ents[i].Index
@@ -291,16 +291,16 @@ func (ms *MemoryStorage) Compact(compactIndex uint64) error {
 // entries[0].Index > ms.entries[0].Index
 // 添加实体
 func (ms *MemoryStorage) Append(entries []pb.Entry) error {
-    // 入参检测
+	// 入参检测
 	if len(entries) == 0 {
 		return nil
 	}
 
-    // 加锁
+	// 加锁
 	ms.Lock()
 	defer ms.Unlock()
 
-    // 找头尾索引
+	// 找头尾索引
 	first := ms.firstIndex()
 	last := entries[0].Index + uint64(len(entries)) - 1
 
@@ -322,10 +322,10 @@ func (ms *MemoryStorage) Append(entries []pb.Entry) error {
 		ms.ents = append([]pb.Entry{}, ms.ents[:offset]...)
 		ms.ents = append(ms.ents, entries...)
 	case uint64(len(ms.ents)) == offset:
-	    // 正好接上
+		// 正好接上
 		ms.ents = append(ms.ents, entries...)
 	default:
-	    // 错误
+		// 错误
 		raftLogger.Panicf("missing log entry [last: %d, append at: %d]",
 			ms.lastIndex(), entries[0].Index)
 	}

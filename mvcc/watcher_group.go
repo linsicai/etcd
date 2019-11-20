@@ -62,10 +62,10 @@ func (eb *eventBatch) add(ev mvccpb.Event) {
 	ebRev := eb.evs[len(eb.evs)-1].Kv.ModRevision
 	evRev := ev.Kv.ModRevision
 	if evRev > ebRev {
-	    // 新的版本
+		// 新的版本
 		eb.revs++
 		if eb.revs > watchBatchMaxRevs {
-		    // 满了
+			// 满了
 			eb.moreRev = evRev
 			return
 		}
@@ -91,7 +91,7 @@ func (wb watcherBatch) add(w *watcher, ev mvccpb.Event) {
 // events look up by watcher.
 func newWatcherBatch(wg *watcherGroup, evs []mvccpb.Event) watcherBatch {
 	if len(wg.watchers) == 0 {
-	    // 没有watch
+		// 没有watch
 		return nil
 	}
 
@@ -109,6 +109,7 @@ func newWatcherBatch(wg *watcherGroup, evs []mvccpb.Event) watcherBatch {
 
 // 监听集
 type watcherSet map[*watcher]struct{}
+
 func (w watcherSet) add(wa *watcher) {
 	if _, ok := w[wa]; ok {
 		panic("add watcher twice!")
@@ -131,6 +132,7 @@ func (w watcherSet) delete(wa *watcher) {
 
 // 监听映射表
 type watcherSetByKey map[string]watcherSet
+
 func (w watcherSetByKey) add(wa *watcher) {
 	set := w[string(wa.key)]
 	if set == nil {
@@ -238,11 +240,11 @@ func (wg *watcherGroup) delete(wa *watcher) bool {
 // choose selects watchers from the watcher group to update
 func (wg *watcherGroup) choose(maxWatchers int, curRev, compactRev int64) (*watcherGroup, int64) {
 	if len(wg.watchers) < maxWatchers {
-	    // 选全部
+		// 选全部
 		return wg, wg.chooseAll(curRev, compactRev)
 	}
 
-    // 选最大监听者
+	// 选最大监听者
 	ret := newWatcherGroup()
 	for w := range wg.watchers {
 		if maxWatchers <= 0 {

@@ -36,6 +36,7 @@ const (
 
 // HandleMetricsHealth registers metrics and health handlers.
 func HandleMetricsHealth(mux *http.ServeMux, srv etcdserver.ServerV2) {
+    // 注册http 响应函数
 	mux.Handle(pathMetrics, promhttp.Handler())
 	mux.Handle(PathHealth, NewHealthHandler(func() Health { return checkHealth(srv) }))
 }
@@ -89,6 +90,7 @@ var (
 )
 
 func init() {
+    // 初始化统计
 	prometheus.MustRegister(healthSuccess)
 	prometheus.MustRegister(healthFailed)
 }

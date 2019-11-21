@@ -52,6 +52,7 @@ var (
     dirMember = dirType("member")
     // 代理
     dirProxy  = dirType("proxy")
+
     // 空的？
     dirEmpty  = dirType("empty")
 )
@@ -199,7 +200,7 @@ func startEtcdOrProxyV2() {
         }
     }
 
-    // 出错，答应详情
+    // 出错，打印详情
     if err != nil {
         if derr, ok := err.(*etcdserver.DiscoveryError); ok {
             switch derr.Err {

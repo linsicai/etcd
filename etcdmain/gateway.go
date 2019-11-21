@@ -31,7 +31,7 @@ var (
     // 监听地址
     gatewayListenAddr            string
 
-    // 网关地址
+    // 默认网关地址
     gatewayEndpoints             []string
 
     // 网关dns 集群
@@ -93,12 +93,14 @@ func newGatewayStartCommand() *cobra.Command {
 
 func stripSchema(eps []string) []string {
     var endpoints []string
+
     for _, ep := range eps {
         if u, err := url.Parse(ep); err == nil && u.Host != "" {
             ep = u.Host
         }
         endpoints = append(endpoints, ep)
     }
+
     return endpoints
 }
 
@@ -119,6 +121,7 @@ func startGateway(cmd *cobra.Command, args []string) {
     }
 
     // Strip the schema from the endpoints because we start just a TCP proxy
+    // 换成IP:port
     srvs.Endpoints = stripSchema(srvs.Endpoints)
     if len(srvs.SRVs) == 0 {
         for _, ep := range srvs.Endpoints {
@@ -156,7 +159,7 @@ func startGateway(cmd *cobra.Command, args []string) {
     }
 
     // At this point, etcd gateway listener is initialized
-    // 同志systemd
+    // 通知systemd
     notifySystemd(lg)
 
     tp.Run()

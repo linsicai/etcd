@@ -68,23 +68,30 @@ const (
 
 // Etcd contains a running etcd server and its listeners.
 type Etcd struct {
+	// 对侧监听者
 	Peers   []*peerListener
+	// 客户端监听者
 	Clients []net.Listener
 	// a map of contexts for the servers that serves client requests.
 	sctxs            map[string]*serveCtx
+	// 指标监听者
 	metricsListeners []net.Listener
 
+	// 服务
 	Server *etcdserver.EtcdServer
 
+	// 配置
 	cfg   Config
+
+    // 同步与信号
 	stopc chan struct{}
 	errc  chan error
-
 	closeOnce sync.Once
 }
 
 type peerListener struct {
 	net.Listener
+
 	serve func() error
 	close func(context.Context) error
 }
@@ -93,6 +100,7 @@ type peerListener struct {
 // The returned Etcd.Server is not guaranteed to have joined the cluster. Wait
 // on the Etcd.Server.ReadyNotify() channel to know when it completes and is ready for use.
 func StartEtcd(inCfg *Config) (e *Etcd, err error) {
+	// 校验配置
 	if err = inCfg.Validate(); err != nil {
 		return nil, err
 	}
